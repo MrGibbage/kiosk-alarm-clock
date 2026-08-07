@@ -141,6 +141,10 @@ Instead:
 - Recommended (not yet actioned): if HA downtime alerting isn't already
   wired for overnight hours, that's the real fix for this risk — worth
   its own follow-up, separate from this project.
+- **Planned, not yet mocked up**: tapping the connection status icon
+  opens a small popup showing HA health — current uptime/downtime, plus
+  a last-synced timestamp so it's clear how fresh the status actually
+  is (not just up/down as of some unknown point).
 
 ## Secrets
 
@@ -183,9 +187,12 @@ the files themselves.
 
 ## Status
 
-Design/planning phase. No code written yet. Repo created on GitHub by
-Skip; directory chowned to `skip:skip`, HA token secret file created.
-Three mockups built and saved (see Mockups above) — main screen, alarms,
-and Lighting & Control are all visually/interactively settled. Remaining
+Design/planning phase. No application code written yet. Repo initialized
+in `/srv/kiosk-alarm-clock`, committed, and pushed to
+`github.com/MrGibbage/kiosk-alarm-clock` (`main` branch) on 2026-08-07.
+Directory chowned to `skip:skip`, HA token secret file created. Three
+mockups built and saved (see Mockups above) — main screen, alarms, and
+Lighting & Control are all visually/interactively settled. Remaining
 open item before scaffolding: where per-alarm sound selection is stored
-(HA helper vs. local config — see Multi-alarm data model above).
+(HA helper vs. local config — see Multi-alarm data model above). Next
+session: start building the real container/frontend.
