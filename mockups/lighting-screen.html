@@ -1,0 +1,491 @@
+<title>Kiosk Alarm Clock — Lighting &amp; Control</title>
+<style>
+  :root {
+    --ground: #14110e;
+    --panel: #211b16;
+    --panel-2: #2a221c;
+    --panel-3: #332a22;
+    --ink: #f4e9d8;
+    --muted: #93857a;
+    --accent: #f2a93b;
+    --accent-ink: #1a1209;
+    --hinge: #0b0908;
+    --shadow: rgba(0, 0, 0, 0.55);
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --ground: #f3ece1;
+      --panel: #e7ddcc;
+      --panel-2: #ded2bd;
+      --panel-3: #d4c6ac;
+      --ink: #2b2420;
+      --muted: #8a7b6c;
+      --accent: #b5701f;
+      --accent-ink: #fdf6ea;
+      --hinge: #c9baa4;
+      --shadow: rgba(60, 45, 25, 0.18);
+    }
+  }
+
+  :root[data-theme="light"] {
+    --ground: #f3ece1;
+    --panel: #e7ddcc;
+    --panel-2: #ded2bd;
+    --panel-3: #d4c6ac;
+    --ink: #2b2420;
+    --muted: #8a7b6c;
+    --accent: #b5701f;
+    --accent-ink: #fdf6ea;
+    --hinge: #c9baa4;
+    --shadow: rgba(60, 45, 25, 0.18);
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #14110e;
+    --panel: #211b16;
+    --panel-2: #2a221c;
+    --panel-3: #332a22;
+    --ink: #f4e9d8;
+    --muted: #93857a;
+    --accent: #f2a93b;
+    --accent-ink: #1a1209;
+    --hinge: #0b0908;
+    --shadow: rgba(0, 0, 0, 0.55);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+    overflow: hidden;
+  }
+
+  button { font: inherit; color: inherit; }
+
+  .stage {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100vh;
+    padding: clamp(1rem, 2.5vw, 1.75rem);
+  }
+
+  .app-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding-bottom: clamp(0.75rem, 2vw, 1.25rem);
+  }
+
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 999px;
+    border: none;
+    background: var(--panel);
+    cursor: pointer;
+    flex: none;
+  }
+
+  .icon-btn svg { width: 1.2rem; height: 1.2rem; }
+
+  .app-bar h1 {
+    flex: 1;
+    margin: 0;
+    font-family: Georgia, "Noto Serif", "Times New Roman", serif;
+    font-size: clamp(1.3rem, 2.4vw, 1.7rem);
+    font-weight: 400;
+  }
+
+  /* ---------- card gallery ---------- */
+
+  .card-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(0.9rem, 2.2vw, 1.5rem);
+    max-width: 54rem;
+    width: 100%;
+    margin: auto auto;
+  }
+
+  .control-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    padding: clamp(1.5rem, 4vw, 2.5rem) 1rem;
+    border-radius: 1rem;
+    border: none;
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+    box-shadow: 0 1px 0 var(--shadow) inset, 0 3px 10px var(--shadow);
+    transition: transform 120ms ease, background 120ms ease;
+  }
+
+  .control-card:active {
+    transform: translateY(2px) scale(0.98);
+    background: var(--panel-2);
+  }
+
+  .control-card svg {
+    width: clamp(2rem, 5vw, 2.6rem);
+    height: clamp(2rem, 5vw, 2.6rem);
+    color: var(--accent);
+  }
+
+  .control-card .card-name {
+    font-size: clamp(1rem, 2vw, 1.2rem);
+    font-weight: 500;
+  }
+
+  .control-card .card-state {
+    font-size: clamp(0.75rem, 1.4vw, 0.9rem);
+    color: var(--muted);
+    letter-spacing: 0.03em;
+  }
+
+  .icon-btn:focus-visible,
+  .control-card:focus-visible,
+  .onoff-btn:focus-visible,
+  .fan-btn:focus-visible,
+  .btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* ---------- dialogs ---------- */
+
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    background: color-mix(in srgb, var(--hinge) 55%, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease;
+    z-index: 10;
+  }
+
+  .backdrop.is-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .dialog {
+    width: min(20rem, 88vw);
+    background: var(--panel);
+    border-radius: 1rem;
+    padding: clamp(1.2rem, 2.4vw, 1.75rem);
+    box-shadow: 0 20px 50px var(--shadow);
+    transform: scale(0.94) translateY(10px);
+    opacity: 0;
+    transition: transform 160ms ease, opacity 160ms ease;
+    text-align: center;
+  }
+
+  .backdrop.is-open .dialog {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .backdrop, .dialog { transition: none; }
+  }
+
+  .dialog h2 {
+    margin: 0 0 clamp(1rem, 2.4vw, 1.5rem);
+    font-family: Georgia, "Noto Serif", "Times New Roman", serif;
+    font-size: clamp(1.3rem, 2.4vw, 1.6rem);
+    font-weight: 400;
+  }
+
+  /* vertical slider */
+
+  .slider-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: clamp(1rem, 2.4vw, 1.5rem);
+  }
+
+  .v-slider-track {
+    position: relative;
+    width: 2.75rem;
+    height: 13rem;
+    border-radius: 999px;
+    background: var(--panel-2);
+    touch-action: none;
+    cursor: pointer;
+  }
+
+  .v-slider-fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 999px;
+    background: var(--accent);
+    opacity: 0.55;
+  }
+
+  .v-slider-thumb {
+    position: absolute;
+    left: 50%;
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 999px;
+    background: var(--accent);
+    box-shadow: 0 2px 8px var(--shadow);
+    transform: translate(-50%, 50%);
+  }
+
+  .slider-value {
+    font-family: Georgia, "Noto Serif", "Times New Roman", serif;
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(1.6rem, 3.6vw, 2rem);
+    min-width: 4ch;
+  }
+
+  .onoff-row {
+    display: flex;
+    gap: 0.6rem;
+    margin-bottom: clamp(1rem, 2.4vw, 1.5rem);
+  }
+
+  .onoff-btn {
+    flex: 1;
+    padding: 0.6rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--panel-3);
+    background: var(--panel-2);
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    letter-spacing: 0.04em;
+  }
+
+  .onoff-btn.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  .btn {
+    padding: 0.65rem 1.1rem;
+    border-radius: 0.5rem;
+    border: none;
+    cursor: pointer;
+    font-size: 0.95rem;
+    width: 100%;
+  }
+
+  .btn--primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+
+  /* fan speed stack */
+
+  .fan-btn {
+    display: block;
+    width: 100%;
+    padding: 0.85rem;
+    margin-bottom: 0.6rem;
+    border-radius: 0.6rem;
+    border: 1px solid var(--panel-3);
+    background: var(--panel-2);
+    color: var(--ink);
+    cursor: pointer;
+    font-size: 1rem;
+    letter-spacing: 0.02em;
+  }
+
+  .fan-btn.is-selected {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+
+  .fan-btn:last-child { margin-bottom: 0; }
+</style>
+
+<div class="stage">
+  <div class="app-bar">
+    <button class="icon-btn" type="button" aria-label="Back to clock">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 19 8 12l7-7"></path></svg>
+    </button>
+    <h1>Lighting &amp; Control</h1>
+  </div>
+
+  <div class="card-grid">
+    <button class="control-card" type="button" id="fanCard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="1.6"></circle><path d="M12 12c0-4 2-7 5-7 1 2 0 5-5 7Z"></path><path d="M12 12c-4 1-7-1-7-4 2-2 5-1 7 4Z"></path><path d="M12 12c1 4-1 7-4 7-2-1-1-5 4-7Z"></path></svg>
+      <span class="card-name">Ceiling Fan</span>
+      <span class="card-state" id="fanCardState">Off</span>
+    </button>
+
+    <button class="control-card" type="button" data-light="skip" data-name="Skip's Light">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10l-3 6h3l-7 9 1.5-6.5H8L7 4Z"></path></svg>
+      <span class="card-name">Skip's Light</span>
+      <span class="card-state" data-state-for="skip">72%</span>
+    </button>
+
+    <button class="control-card" type="button" data-light="suzanne" data-name="Suzanne's Light">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10l-3 6h3l-7 9 1.5-6.5H8L7 4Z"></path></svg>
+      <span class="card-name">Suzanne's Light</span>
+      <span class="card-state" data-state-for="suzanne">Off</span>
+    </button>
+  </div>
+</div>
+
+<div class="backdrop" id="lightBackdrop">
+  <div class="dialog" role="dialog" aria-modal="true" id="lightDialog">
+    <h2 id="lightDialogTitle">Light</h2>
+    <div class="slider-row">
+      <div class="v-slider-track" id="brightnessTrack">
+        <div class="v-slider-fill" id="brightnessFill"></div>
+        <div class="v-slider-thumb" id="brightnessThumb"></div>
+      </div>
+      <span class="slider-value" id="brightnessValue">72%</span>
+    </div>
+    <div class="onoff-row">
+      <button class="onoff-btn" id="lightOnBtn" type="button">ON</button>
+      <button class="onoff-btn" id="lightOffBtn" type="button">OFF</button>
+    </div>
+    <button class="btn btn--primary" id="lightDoneBtn" type="button">Done</button>
+  </div>
+</div>
+
+<div class="backdrop" id="fanBackdrop">
+  <div class="dialog" role="dialog" aria-modal="true">
+    <h2>Ceiling Fan</h2>
+    <button class="fan-btn" type="button" data-speed="max">Max</button>
+    <button class="fan-btn" type="button" data-speed="med">Med</button>
+    <button class="fan-btn" type="button" data-speed="low">Low</button>
+    <button class="fan-btn" type="button" data-speed="off">Off</button>
+  </div>
+</div>
+
+<script>
+  (function () {
+    "use strict";
+
+    var lightState = { skip: 72, suzanne: 0 };
+    var fanState = "off";
+    var fanLabels = { max: "Max", med: "Med", low: "Low", off: "Off" };
+
+    var lightBackdrop = document.getElementById("lightBackdrop");
+    var lightDialogTitle = document.getElementById("lightDialogTitle");
+    var brightnessTrack = document.getElementById("brightnessTrack");
+    var brightnessFill = document.getElementById("brightnessFill");
+    var brightnessThumb = document.getElementById("brightnessThumb");
+    var brightnessValue = document.getElementById("brightnessValue");
+    var currentLightId = null;
+
+    function renderBrightness(pct) {
+      brightnessFill.style.height = pct + "%";
+      brightnessThumb.style.bottom = pct + "%";
+      brightnessValue.textContent = pct + "%";
+    }
+
+    function setBrightnessFromEvent(evt) {
+      var rect = brightnessTrack.getBoundingClientRect();
+      var y = evt.clientY - rect.top;
+      var pct = Math.round(100 - (y / rect.height) * 100);
+      pct = Math.max(0, Math.min(100, pct));
+      lightState[currentLightId] = pct;
+      renderBrightness(pct);
+    }
+
+    var draggingSlider = false;
+    brightnessTrack.addEventListener("pointerdown", function (evt) {
+      draggingSlider = true;
+      brightnessTrack.setPointerCapture(evt.pointerId);
+      setBrightnessFromEvent(evt);
+    });
+    brightnessTrack.addEventListener("pointermove", function (evt) {
+      if (draggingSlider) setBrightnessFromEvent(evt);
+    });
+    brightnessTrack.addEventListener("pointerup", function () {
+      draggingSlider = false;
+    });
+
+    document.getElementById("lightOnBtn").addEventListener("click", function () {
+      lightState[currentLightId] = lightState[currentLightId] > 0 ? lightState[currentLightId] : 100;
+      renderBrightness(lightState[currentLightId]);
+    });
+    document.getElementById("lightOffBtn").addEventListener("click", function () {
+      lightState[currentLightId] = 0;
+      renderBrightness(0);
+    });
+
+    function cardStateText(pct) {
+      return pct > 0 ? pct + "%" : "Off";
+    }
+
+    function openLight(id, name) {
+      currentLightId = id;
+      lightDialogTitle.textContent = name;
+      renderBrightness(lightState[id]);
+      lightBackdrop.classList.add("is-open");
+    }
+
+    function closeLight() {
+      lightBackdrop.classList.remove("is-open");
+      var el = document.querySelector('[data-state-for="' + currentLightId + '"]');
+      if (el) el.textContent = cardStateText(lightState[currentLightId]);
+    }
+
+    Array.prototype.slice.call(document.querySelectorAll("[data-light]")).forEach(function (card) {
+      card.addEventListener("click", function () {
+        openLight(card.dataset.light, card.dataset.name);
+      });
+    });
+
+    document.getElementById("lightDoneBtn").addEventListener("click", closeLight);
+    lightBackdrop.addEventListener("click", function (evt) {
+      if (evt.target === lightBackdrop) closeLight();
+    });
+
+    var fanBackdrop = document.getElementById("fanBackdrop");
+    var fanCard = document.getElementById("fanCard");
+    var fanCardState = document.getElementById("fanCardState");
+
+    fanCard.addEventListener("click", function () {
+      Array.prototype.slice.call(document.querySelectorAll(".fan-btn")).forEach(function (b) {
+        b.classList.toggle("is-selected", b.dataset.speed === fanState);
+      });
+      fanBackdrop.classList.add("is-open");
+    });
+
+    Array.prototype.slice.call(document.querySelectorAll(".fan-btn")).forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        fanState = btn.dataset.speed;
+        fanCardState.textContent = fanLabels[fanState];
+        fanBackdrop.classList.remove("is-open");
+      });
+    });
+
+    fanBackdrop.addEventListener("click", function (evt) {
+      if (evt.target === fanBackdrop) fanBackdrop.classList.remove("is-open");
+    });
+
+    renderBrightness(lightState.skip);
+  })();
+</script>

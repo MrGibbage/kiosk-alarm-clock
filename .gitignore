@@ -1,0 +1,16 @@
+# secrets - never commit
+.env
+.env.*
+!.env.example
+
+# media assets - copyright + "no binaries in git"
+sounds/
+media/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# common local artifacts
+node_modules/
+*.log

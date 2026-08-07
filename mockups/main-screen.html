@@ -1,0 +1,539 @@
+<title>Kiosk Alarm Clock — Main Screen</title>
+<style>
+  :root {
+    --ground: #14110e;
+    --panel: #211b16;
+    --panel-2: #2a221c;
+    --ink: #f4e9d8;
+    --muted: #93857a;
+    --accent: #f2a93b;
+    --hinge: #0b0908;
+    --shadow: rgba(0, 0, 0, 0.55);
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --ground: #f3ece1;
+      --panel: #e7ddcc;
+      --panel-2: #ded2bd;
+      --ink: #2b2420;
+      --muted: #8a7b6c;
+      --accent: #b5701f;
+      --hinge: #c9baa4;
+      --shadow: rgba(60, 45, 25, 0.18);
+    }
+  }
+
+  :root[data-theme="light"] {
+    --ground: #f3ece1;
+    --panel: #e7ddcc;
+    --panel-2: #ded2bd;
+    --ink: #2b2420;
+    --muted: #8a7b6c;
+    --accent: #b5701f;
+    --hinge: #c9baa4;
+    --shadow: rgba(60, 45, 25, 0.18);
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #14110e;
+    --panel: #211b16;
+    --panel-2: #2a221c;
+    --ink: #f4e9d8;
+    --muted: #93857a;
+    --accent: #f2a93b;
+    --hinge: #0b0908;
+    --shadow: rgba(0, 0, 0, 0.55);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+    overflow: hidden;
+  }
+
+  .stage {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100vh;
+    padding: clamp(1rem, 3vw, 2.25rem);
+    background:
+      radial-gradient(ellipse 70% 55% at 50% 32%, var(--panel-2) 0%, var(--ground) 72%);
+    animation: fade-in 500ms ease-out both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stage { animation: none; }
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* ---------- status row ---------- */
+
+  .status-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .status-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: none;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+    padding: 0.45em 0.85em 0.45em 0.65em;
+    border-radius: 999px;
+    background: var(--panel);
+    color: var(--muted);
+    font-size: clamp(0.75rem, 1.3vw, 0.95rem);
+    letter-spacing: 0.02em;
+    box-shadow: 0 1px 0 var(--shadow) inset, 0 2px 6px var(--shadow);
+  }
+
+  .pill svg { width: 1em; height: 1em; flex: none; }
+
+  .pill--alarm { color: var(--ink); }
+  .pill--alarm svg { color: var(--accent); }
+
+  .pill--vacation { opacity: 0.85; }
+
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: clamp(2.4rem, 4.2vw, 3rem);
+    height: clamp(2.4rem, 4.2vw, 3rem);
+    border-radius: 999px;
+    border: none;
+    background: var(--panel);
+    color: var(--accent);
+    cursor: pointer;
+    box-shadow: 0 1px 0 var(--shadow) inset, 0 2px 6px var(--shadow);
+    flex: none;
+  }
+
+  .theme-toggle svg { width: 55%; height: 55%; }
+  .theme-toggle .icon-moon { display: none; }
+  :root[data-theme="light"] .theme-toggle .icon-sun { display: block; }
+  :root[data-theme="light"] .theme-toggle .icon-moon { display: none; }
+  :root[data-theme="dark"] .theme-toggle .icon-sun { display: none; }
+  :root[data-theme="dark"] .theme-toggle .icon-moon { display: block; }
+
+  .theme-toggle:focus-visible,
+  .connection-status:focus-visible,
+  .tile:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  /* ---------- connection status ---------- */
+
+  .connection-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: clamp(2.4rem, 4.2vw, 3rem);
+    height: clamp(2.4rem, 4.2vw, 3rem);
+    border-radius: 999px;
+    border: none;
+    background: var(--panel);
+    color: var(--accent);
+    cursor: pointer;
+    box-shadow: 0 1px 0 var(--shadow) inset, 0 2px 6px var(--shadow);
+    flex: none;
+  }
+
+  .connection-status svg { width: 55%; height: 55%; }
+  .connection-status .conn-icon-broken { display: none; }
+
+  .connection-status[data-state="offline"] {
+    color: var(--muted);
+    animation: connection-pulse 2.4s ease-in-out infinite;
+  }
+
+  .connection-status[data-state="offline"] .conn-icon-normal { display: none; }
+  .connection-status[data-state="offline"] .conn-icon-broken { display: block; }
+  .connection-status[data-state="offline"] .conn-crack { stroke: var(--accent); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .connection-status[data-state="offline"] { animation: none; }
+  }
+
+  @keyframes connection-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+  }
+
+  /* ---------- clock ---------- */
+
+  .clock {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(0.5rem, 1.6vw, 1.1rem);
+    margin: auto 0;
+  }
+
+  .flap-group {
+    display: flex;
+    gap: clamp(0.35rem, 1vw, 0.6rem);
+  }
+
+  .flap-digit {
+    position: relative;
+    width: clamp(3rem, 17vw, 13.5rem);
+    height: clamp(4.5rem, 27.4vw, 21.8rem);
+    perspective: 60rem;
+  }
+
+  .flap-face {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--panel);
+    border-radius: 0.35rem;
+    box-shadow: 0 6px 18px var(--shadow), inset 0 0 0 1px var(--hinge);
+    backface-visibility: hidden;
+    transform-origin: 50% 50%;
+    will-change: transform;
+  }
+
+  .flap-face span {
+    font-family: Georgia, "Noto Serif", "Times New Roman", serif;
+    font-size: clamp(3rem, 17vw, 13.5rem);
+    line-height: 1;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 22px color-mix(in srgb, var(--accent) 28%, transparent);
+  }
+
+  /* the persistent seam across the middle, the signature of a split-flap card */
+  .flap-digit::after {
+    content: "";
+    position: absolute;
+    left: 0.15rem;
+    right: 0.15rem;
+    top: calc(50% - 1px);
+    height: 2px;
+    background: var(--hinge);
+    z-index: 3;
+    pointer-events: none;
+  }
+
+  .flap-face--top { transition: transform 150ms ease-in; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flap-face--top { transition: none; }
+  }
+
+  .colon {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(0.6rem, 2.2vw, 1.3rem);
+    justify-content: center;
+  }
+
+  .colon span {
+    width: clamp(0.5rem, 1.6vw, 0.9rem);
+    height: clamp(0.5rem, 1.6vw, 0.9rem);
+    border-radius: 999px;
+    background: var(--accent);
+    opacity: 0.85;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .colon span { animation: none; }
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.85; }
+    50% { opacity: 0.35; }
+  }
+
+  .meridiem {
+    align-self: flex-end;
+    margin-bottom: clamp(0.6rem, 2vw, 1.4rem);
+    font-size: clamp(1rem, 2.2vw, 1.5rem);
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+
+  .date {
+    text-align: center;
+    margin: clamp(1.25rem, 5vh, 2.5rem) 0;
+    font-size: clamp(0.9rem, 1.8vw, 1.15rem);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* ---------- buttons ---------- */
+
+  .buttons {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: clamp(0.5rem, 1.4vw, 1rem);
+    max-width: 54rem;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: clamp(0.7rem, 2vw, 1.1rem) 0.4rem;
+    border: none;
+    border-radius: 0.6rem;
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+    box-shadow: 0 1px 0 var(--shadow) inset, 0 3px 8px var(--shadow);
+    transition: transform 120ms ease, background 120ms ease;
+  }
+
+  .tile:active {
+    transform: translateY(2px) scale(0.98);
+    background: var(--panel-2);
+  }
+
+  .tile svg {
+    width: clamp(1.3rem, 3.4vw, 1.9rem);
+    height: clamp(1.3rem, 3.4vw, 1.9rem);
+    color: var(--accent);
+  }
+
+  .tile span {
+    font-size: clamp(0.68rem, 1.4vw, 0.85rem);
+    letter-spacing: 0.03em;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  .buttons[data-connection="offline"] .tile {
+    opacity: 0.42;
+    filter: grayscale(0.5);
+    pointer-events: none;
+    transition: opacity 200ms ease, filter 200ms ease;
+  }
+</style>
+
+<div class="stage">
+  <div class="status-row">
+    <div class="pills">
+      <div class="pill pill--alarm">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a6 6 0 0 0-6 6c0 3.2-1 4.5-2 5.5h16c-1-1-2-2.3-2-5.5a6 6 0 0 0-6-6Z"></path><path d="M10.3 19.5a2 2 0 0 0 3.4 0"></path></svg>
+        <span>Alarm&nbsp;6:30&nbsp;AM</span>
+      </div>
+      <div class="pill pill--vacation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="1.5"></rect><path d="M9 8V6a3 3 0 0 1 3-3v0a3 3 0 0 1 3 3v2"></path></svg>
+        <span>Vacation&nbsp;· 3&nbsp;days&nbsp;left</span>
+      </div>
+    </div>
+    <div class="status-actions">
+      <button class="connection-status" id="connectionStatus" type="button" data-state="online" aria-label="Home Assistant connection status">
+        <svg class="conn-icon-normal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 11 12 4l8 7"></path>
+          <path d="M6 10v8a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-8"></path>
+          <path d="M10 19v-5h4v5"></path>
+        </svg>
+        <svg class="conn-icon-broken" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 11 12 4l8 7"></path>
+          <path d="M6 10v8a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-8"></path>
+          <path d="M10 19v-5h4v5"></path>
+          <path class="conn-crack" d="M13 4 10.5 9.5 13.5 12 10.5 16 13 21"></path>
+        </svg>
+      </button>
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle day and night display">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"></circle><path d="M12 2.5v2.4M12 19.1v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"></path></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"></path></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="clock" aria-live="off">
+    <div class="flap-group" id="hourGroup"></div>
+    <div class="colon"><span></span><span></span></div>
+    <div class="flap-group" id="minuteGroup"></div>
+    <div class="meridiem" id="meridiem">AM</div>
+  </div>
+
+  <p class="date" id="date">Friday, August 7</p>
+
+  <nav class="buttons" id="buttons">
+    <button class="tile" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="1.6"></circle><path d="M12 12c0-4 2-7 5-7 1 2 0 5-5 7Z"></path><path d="M12 12c-4 1-7-1-7-4 2-2 5-1 7 4Z"></path><path d="M12 12c1 4-1 7-4 7-2-1-1-5 4-7Z"></path></svg>
+      <span>Lighting</span>
+    </button>
+    <button class="tile" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5h8"></path><path d="M9 5c0 3 1.5 4.5 3 4.5S15 8 15 5"></path><path d="M9.5 12.5 8 16M12 12.5v4M14.5 12.5 16 16"></path></svg>
+      <span>Ceiling&nbsp;Light</span>
+    </button>
+    <button class="tile" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"></path></svg>
+      <span>Good&nbsp;Night</span>
+    </button>
+    <button class="tile" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15a1 1 0 0 1 1 1 5 5 0 0 1-5 5H8a5 5 0 0 1-5-5v-1Z"></path><path d="M6 12V7a2 2 0 0 1 3-1.7"></path><path d="M4 20v-1M18 20v-1"></path></svg>
+      <span>Bathroom</span>
+    </button>
+    <button class="tile" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a6 6 0 0 0-6 6c0 3.2-1 4.5-2 5.5h11"></path><path d="M17 8a6 6 0 0 1 1 3c0 3.2 1 4.5 2 5.5h-3M4 4l16 16"></path></svg>
+      <span>Skip&nbsp;Tonight</span>
+    </button>
+    <button class="tile" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a6 6 0 0 0-6 6c0 3.2-1 4.5-2 5.5h16c-1-1-2-2.3-2-5.5a6 6 0 0 0-6-6Z"></path><path d="M10.3 19.5a2 2 0 0 0 3.4 0"></path></svg>
+      <span>Snooze</span>
+    </button>
+  </nav>
+</div>
+
+<script>
+  (function () {
+    "use strict";
+
+    var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    function buildDigit() {
+      var wrap = document.createElement("div");
+      wrap.className = "flap-digit";
+      var top = document.createElement("div");
+      top.className = "flap-face flap-face--top";
+      var span = document.createElement("span");
+      top.appendChild(span);
+      wrap.appendChild(top);
+      wrap._span = span;
+      wrap._face = top;
+      wrap._value = null;
+      return wrap;
+    }
+
+    function setDigit(wrap, value) {
+      if (wrap._value === value) return;
+      var isFirstRender = wrap._value === null;
+      wrap._value = value;
+
+      if (isFirstRender || reduceMotion) {
+        // nothing to flip away from yet (or motion is disabled) - just show it
+        wrap._span.textContent = value;
+        return;
+      }
+
+      var face = wrap._face;
+      var settled = false;
+
+      function settle() {
+        if (settled) return;
+        settled = true;
+        face.style.transition = "none";
+        face.style.transform = "rotateX(90deg)";
+        // force reflow so the next transition actually runs
+        void face.offsetHeight;
+        face.style.transition = "transform 150ms ease-out";
+        face.style.transform = "rotateX(0deg)";
+        face.removeEventListener("transitionend", settle);
+      }
+
+      // fallback in case transitionend never fires (dropped frame, first-paint race, etc.)
+      // - guarantees a digit can never get stuck edge-on and invisible
+      setTimeout(function () {
+        if (!settled) {
+          wrap._span.textContent = value;
+          settle();
+        }
+      }, 250);
+
+      face.addEventListener("transitionend", function onMid() {
+        wrap._span.textContent = value;
+        settle();
+      }, { once: true });
+
+      face.style.transition = "transform 150ms ease-in";
+      face.style.transform = "rotateX(-90deg)";
+    }
+
+    var hourGroup = document.getElementById("hourGroup");
+    var minuteGroup = document.getElementById("minuteGroup");
+    var digits = {
+      h1: buildDigit(), h2: buildDigit(),
+      m1: buildDigit(), m2: buildDigit()
+    };
+    hourGroup.appendChild(digits.h1);
+    hourGroup.appendChild(digits.h2);
+    minuteGroup.appendChild(digits.m1);
+    minuteGroup.appendChild(digits.m2);
+
+    var meridiemEl = document.getElementById("meridiem");
+    var dateEl = document.getElementById("date");
+
+    function tick() {
+      var now = new Date();
+      var h = now.getHours();
+      var meridiem = h >= 12 ? "PM" : "AM";
+      var h12 = h % 12;
+      if (h12 === 0) h12 = 12;
+      var hh = String(h12).padStart(2, "0");
+      var mm = String(now.getMinutes()).padStart(2, "0");
+
+      setDigit(digits.h1, hh[0]);
+      setDigit(digits.h2, hh[1]);
+      setDigit(digits.m1, mm[0]);
+      setDigit(digits.m2, mm[1]);
+      meridiemEl.textContent = meridiem;
+
+      dateEl.textContent = now.toLocaleDateString(undefined, {
+        weekday: "long", month: "long", day: "numeric"
+      });
+    }
+
+    tick();
+    setInterval(tick, 1000);
+
+    var connectionStatus = document.getElementById("connectionStatus");
+    var buttonsNav = document.getElementById("buttons");
+    connectionStatus.addEventListener("click", function () {
+      var isOnline = connectionStatus.dataset.state !== "offline";
+      var nextState = isOnline ? "offline" : "online";
+      connectionStatus.dataset.state = nextState;
+      buttonsNav.dataset.connection = nextState;
+    });
+
+    var toggle = document.getElementById("themeToggle");
+    var root = document.documentElement;
+    toggle.addEventListener("click", function () {
+      var current = root.getAttribute("data-theme");
+      var isDark = current
+        ? current === "dark"
+        : window.matchMedia("(prefers-color-scheme: dark)").matches;
+      root.setAttribute("data-theme", isDark ? "light" : "dark");
+    });
+  })();
+</script>
