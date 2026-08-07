@@ -85,6 +85,14 @@ rather than inventing a new look per screen.
   later, HTTPS is required for service workers — internal Caddy-on-OPNsense
   + `*.pelorus.org` DNS covers it, no public Cloudflare Tunnel route needed
   (LAN-only bedside device).
+- **Taking the tablet on the road**: works, but only via **Tailscale**, not
+  Nabu Casa. Nabu Casa only proxies remote access to HA itself — it doesn't
+  expose this app's own page, which is hosted on docker-server behind
+  internal-only DNS per the point above. Tailscale on the tablet gives it a
+  private route back to the LAN for *both* the page's own assets and its
+  HA API calls, so nothing about the architecture needs to change for
+  travel as long as Tailscale is active on the device. Skip already has
+  both services; this was clarified 2026-08-07, not yet tested in practice.
 
 ### Multi-alarm data model (decided 2026-08-07)
 
@@ -176,6 +184,33 @@ than reusing homelab-mcp's own HA token or building a server-side proxy.
 The token will be embedded in client-side config and is readable via
 view-source on the tablet — acceptable risk for a LAN-only device behind
 Fully Kiosk's own device-admin PIN, given the token's scope is limited.
+
+## Multiple instances (e.g. a second clock for another family member)
+
+Not planned, not decided — documented for reference in case it comes up.
+
+Cloning this container for a second person (e.g. Skip's daughter) does
+**not** need any "user profile" concept built into the app. HA doesn't
+namespace helpers per user automatically, so the real risk is entity
+collision: if a second instance is deployed still pointed at
+`schedule.alarm_weekday` / `input_boolean.alarm_weekday_enabled` etc.,
+both tablets would be reading and writing the *same* alarm. The fix is
+just deployment config, not code:
+
+- Give each instance its own distinctly-named HA entities (e.g. prefix
+  by person or bedroom — `schedule.daughter_alarm_weekday` vs.
+  `schedule.alarm_weekday`), and point each container's config at its
+  own set.
+- Mint each instance's HA long-lived token from its **own restricted HA
+  user**, scoped to just that person's area/entities (same pattern as
+  Skip's own token). This isn't just tidy — it's real enforcement: a
+  misconfigured instance literally can't touch the wrong entities if its
+  token doesn't have permission to.
+
+HA's own "Users" feature (Settings → People) is about login/permissions,
+not automatic per-user data partitioning, so it doesn't solve this by
+itself — the restricted-user + distinct-entity-naming combination above
+is the actual mechanism.
 
 ## Media assets
 
