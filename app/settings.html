@@ -113,6 +113,13 @@
   .field-status[data-state="error"] { color: #e0685a; }
   .field-status[data-state="checking"] { color: var(--muted); }
 
+  .settings-hint {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 0 0 1rem;
+    line-height: 1.4;
+  }
+
   .save-row {
     flex: none;
     display: flex;
@@ -153,6 +160,12 @@
     </button>
     <h1>Settings</h1>
   </div>
+
+  <p class="settings-hint">Home Assistant URL and token are required. Every
+    entity field below is optional — leave any blank and that tile/control
+    just won't do anything until it's filled in later. Fields save
+    automatically as soon as they validate, and Back saves whatever's
+    currently typed even if you haven't validated it yet.</p>
 
   <div class="settings-body" id="fieldContainer"></div>
 
@@ -204,7 +217,8 @@
       row.appendChild(input);
 
       // Base URL and token don't map to a single HA entity — nothing to
-      // validate against /api/states for those two.
+      // validate against /api/states for those two (they get the Test
+      // Connection button below instead).
       var status = document.createElement("div");
       status.className = "field-status";
 
@@ -221,17 +235,82 @@
       field.appendChild(status);
       status.id = "status-" + f.key;
       container.appendChild(field);
+
+      if (f.key === "haToken") {
+        var testField = document.createElement("div");
+        testField.className = "field";
+        var testBtn = document.createElement("button");
+        testBtn.className = "validate-btn";
+        testBtn.type = "button";
+        testBtn.textContent = "Test Connection";
+        testBtn.style.width = "100%";
+        testBtn.addEventListener("click", testConnection);
+        var testStatus = document.createElement("div");
+        testStatus.className = "field-status";
+        testStatus.id = "status-connection";
+        testField.appendChild(testBtn);
+        testField.appendChild(testStatus);
+        container.appendChild(testField);
+      }
     });
+
+    // Reads the form as it currently stands — not what's saved in
+    // localStorage — so Test Connection / Validate work before Save is
+    // ever clicked. Passing this explicitly to HAClient is what makes that
+    // possible (see ha-client.js's optional `cfg` argument).
+    function currentFormCfg() {
+      return { haBaseUrl: inputs.haBaseUrl.value.trim(), haToken: inputs.haToken.value.trim() };
+    }
+
+    function testConnection() {
+      var status = document.getElementById("status-connection");
+      var cfg = currentFormCfg();
+      if (!cfg.haBaseUrl || !cfg.haToken) {
+        status.dataset.state = "error";
+        status.textContent = "✗ Fill in both URL and token first";
+        return;
+      }
+      // Shown in every result (success or failure) so it's never a guessing
+      // game whether a stray character/missing scheme snuck into the URL.
+      var attemptedUrl = cfg.haBaseUrl.replace(/\/+$/, "") + "/api/";
+      status.dataset.state = "checking";
+      status.textContent = "Checking " + attemptedUrl + " …";
+      HAClient.ping(cfg).then(function (res) {
+        if (res.ok) {
+          ConfigStore.saveFields(cfg);
+          status.dataset.state = "ok";
+          status.textContent = "✓ Connected and saved (" + attemptedUrl + ")";
+        } else if (res.status === 401) {
+          status.dataset.state = "error";
+          status.textContent = "✗ Unauthorized at " + attemptedUrl + " — check the token";
+        } else if (res.status === 0) {
+          status.dataset.state = "error";
+          status.textContent = "✗ Can't reach " + attemptedUrl + " (" + (res.error || "network error") + ") — check the URL and that HA allows this origin (CORS)";
+        } else {
+          status.dataset.state = "error";
+          status.textContent = "✗ " + attemptedUrl + " responded with an error (" + res.status + ")";
+        }
+      });
+    }
 
     function validateField(key) {
       var status = document.getElementById("status-" + key);
       var value = inputs[key].value.trim();
+      // Every entity field is optional — an empty one just means that
+      // tile/control won't do anything until it's filled in, not an error
+      // to fix before leaving this screen.
+      if (!value) {
+        status.dataset.state = "";
+        status.textContent = "Not set — that control will do nothing until filled in";
+        return;
+      }
       status.dataset.state = "checking";
       status.textContent = "Checking…";
-      ConfigStore.validateEntity(value).then(function (res) {
+      ConfigStore.validateEntity(value, currentFormCfg()).then(function (res) {
         if (res.ok) {
+          ConfigStore.saveFields(makeFieldPartial(key));
           status.dataset.state = "ok";
-          status.textContent = "✓ " + res.friendlyName;
+          status.textContent = "✓ Saved — " + res.friendlyName;
         } else {
           status.dataset.state = "error";
           status.textContent = "✗ " + res.error;
@@ -239,20 +318,40 @@
       });
     }
 
+    function makeFieldPartial(key) {
+      var partial = {};
+      partial[key] = inputs[key].value.trim();
+      return partial;
+    }
+
+    // Persists every field exactly as currently typed, valid or not,
+    // validated or not — used by both Save and Back so neither one can
+    // silently discard what's on screen.
+    function saveAllFields() {
+      var next = {};
+      ConfigStore.FIELDS.forEach(function (f) { next[f.key] = inputs[f.key].value.trim(); });
+      ConfigStore.save(next);
+    }
+
     document.getElementById("validateAllBtn").addEventListener("click", function () {
+      testConnection();
       ConfigStore.FIELDS.forEach(function (f) {
         if (f.key !== "haBaseUrl" && f.key !== "haToken") validateField(f.key);
       });
     });
 
     document.getElementById("saveBtn").addEventListener("click", function () {
-      var next = {};
-      ConfigStore.FIELDS.forEach(function (f) { next[f.key] = inputs[f.key].value.trim(); });
-      ConfigStore.save(next);
+      saveAllFields();
       window.location.href = "index.html";
     });
 
     document.getElementById("backBtn").addEventListener("click", function () {
+      // Back used to discard everything typed since page load — now it
+      // saves first, same as the Save button, so a mis-tap can't wipe the
+      // form. Individual fields also already saved themselves the moment
+      // each one validated successfully; this just catches anything typed
+      // but not yet (or not successfully) validated.
+      saveAllFields();
       window.location.href = "index.html";
     });
   })();

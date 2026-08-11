@@ -44,16 +44,27 @@ var ConfigStore = (function () {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
   }
 
+  // Merges one or more fields into whatever's already persisted, rather
+  // than replacing the whole config — so a single validated field can be
+  // saved immediately without waiting on the rest of the form.
+  function saveFields(partial) {
+    var cfg = load();
+    Object.keys(partial).forEach(function (k) { cfg[k] = partial[k]; });
+    save(cfg);
+    return cfg;
+  }
+
   function isConfigured() {
     var cfg = load();
     return !!(cfg.haBaseUrl && cfg.haToken);
   }
 
-  // Live-validates one entity ID against HA. Resolves to
-  // { ok: true, friendlyName } or { ok: false, error }.
-  function validateEntity(entityId) {
+  // Live-validates one entity ID against HA. Pass `cfg` to check against
+  // unsaved form values instead of the persisted config (see settings.html).
+  // Resolves to { ok: true, friendlyName } or { ok: false, error }.
+  function validateEntity(entityId, cfg) {
     if (!entityId) return Promise.resolve({ ok: false, error: "empty" });
-    return HAClient.getState(entityId).then(function (res) {
+    return HAClient.getState(entityId, cfg).then(function (res) {
       if (!res.ok) {
         return { ok: false, error: res.status === 404 ? "not found" : (res.error || "HA error " + res.status) };
       }
@@ -101,6 +112,7 @@ var ConfigStore = (function () {
     FIXED: FIXED,
     load: load,
     save: save,
+    saveFields: saveFields,
     isConfigured: isConfigured,
     validateEntity: validateEntity,
     getAlarmSound: getAlarmSound,

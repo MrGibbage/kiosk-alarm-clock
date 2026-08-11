@@ -5,24 +5,28 @@
 var HAClient = (function () {
   "use strict";
 
-  function base() {
-    var cfg = ConfigStore.load();
+  // Every method below takes an optional trailing `cfg` argument — pass an
+  // explicit {haBaseUrl, haToken} to check *unsaved* form values (as
+  // settings.html does) instead of whatever's currently persisted. Omit it
+  // for the normal case of using the saved config.
+  function base(cfg) {
+    cfg = cfg || ConfigStore.load();
     return (cfg.haBaseUrl || "").replace(/\/+$/, "");
   }
 
-  function headers() {
-    var cfg = ConfigStore.load();
+  function headers(cfg) {
+    cfg = cfg || ConfigStore.load();
     return {
       "Authorization": "Bearer " + (cfg.haToken || ""),
       "Content-Type": "application/json"
     };
   }
 
-  function request(method, path, body) {
-    var url = base() + path;
+  function request(method, path, body, cfg) {
+    var url = base(cfg) + path;
     return fetch(url, {
       method: method,
-      headers: headers(),
+      headers: headers(cfg),
       body: body !== undefined ? JSON.stringify(body) : undefined
     }).then(function (resp) {
       if (resp.status === 204) return { ok: true, status: 204, data: null };
@@ -39,12 +43,12 @@ var HAClient = (function () {
 
   return {
     // Connection health — cheapest possible authenticated call.
-    ping: function () {
-      return request("GET", "/api/");
+    ping: function (cfg) {
+      return request("GET", "/api/", undefined, cfg);
     },
 
-    getState: function (entityId) {
-      return request("GET", "/api/states/" + encodeURIComponent(entityId));
+    getState: function (entityId, cfg) {
+      return request("GET", "/api/states/" + encodeURIComponent(entityId), undefined, cfg);
     },
 
     getStates: function () {
