@@ -186,7 +186,8 @@
   .time-segment:focus-visible,
   .sound-trigger:focus-visible,
   .sound-option:focus-visible,
-  .sound-preview:focus-visible {
+  .sound-preview:focus-visible,
+  .test-time-btn:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
@@ -360,6 +361,19 @@
     margin-bottom: clamp(1rem, 2.4vw, 1.5rem);
   }
 
+  .test-time-btn {
+    display: block;
+    width: 100%;
+    padding: 0.5rem;
+    margin: -0.5rem 0 clamp(1rem, 2.4vw, 1.5rem);
+    border: 1px dashed var(--panel-3);
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+
   .dial {
     width: 15.5rem;
     height: 15.5rem;
@@ -435,6 +449,15 @@
 
   .sheet-actions-spacer { flex: 1; }
 
+  .sheet-status {
+    font-size: 0.82rem;
+    color: #e0685a;
+    margin: 0.6rem 0 0;
+    line-height: 1.4;
+  }
+
+  .sheet-status:empty { display: none; }
+
   .btn {
     padding: 0.6rem 1.1rem;
     border-radius: 0.5rem;
@@ -461,6 +484,8 @@
     </button>
   </div>
 
+  <p class="sheet-status" id="listStatus" style="max-width: 44rem; width: 100%; margin: 0 auto 0.5rem;"></p>
+
   <div class="alarm-list" id="alarmList">
     <button class="add-row" id="addAlarmRow" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>
@@ -484,6 +509,8 @@
     <div class="dial-wrap">
       <svg class="dial" id="dial" viewBox="0 0 240 240"></svg>
     </div>
+
+    <button class="test-time-btn" id="testTimeBtn" type="button">Set to 1 min from now (testing)</button>
 
     <div class="field">
       <span class="field-label">Repeat</span>
@@ -513,6 +540,8 @@
       <input class="label-input" id="labelInput" type="text" value="Weekday" />
     </div>
 
+    <p class="sheet-status" id="sheetStatus"></p>
+
     <div class="sheet-actions">
       <button class="btn btn--danger" id="deleteBtn" type="button" hidden>Delete</button>
       <span class="sheet-actions-spacer"></span>
@@ -524,6 +553,7 @@
 
 <script src="js/config-store.js"></script>
 <script src="js/ha-client.js"></script>
+<script src="js/ha-ws-client.js"></script>
 <script src="js/alarms.js"></script>
 </body>
 </html>

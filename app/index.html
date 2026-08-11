@@ -64,8 +64,14 @@
 
   .pill svg { width: 1em; height: 1em; flex: none; }
 
-  .pill--alarm { color: var(--ink); }
+  .pill--alarm {
+    color: var(--ink);
+    border: none;
+    cursor: pointer;
+    transition: transform 120ms ease, background 120ms ease;
+  }
   .pill--alarm svg { color: var(--accent); }
+  .pill--alarm:active { transform: translateY(1px); background: var(--panel-2); }
 
   .pill--vacation { opacity: 0.85; }
   .pill[hidden] { display: none; }
@@ -147,6 +153,16 @@
     justify-content: center;
     gap: clamp(0.5rem, 1.6vw, 1.1rem);
     margin: auto 0;
+    cursor: pointer;
+    transition: transform 120ms ease;
+  }
+
+  .clock:active { transform: scale(0.99); }
+
+  .clock:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 6px;
+    border-radius: 0.5rem;
   }
 
   .flap-group {
@@ -302,10 +318,10 @@
 <div class="stage">
   <div class="status-row">
     <div class="pills">
-      <div class="pill pill--alarm" id="alarmPill">
+      <button class="pill pill--alarm" type="button" id="alarmPill" aria-label="Manage alarms">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a6 6 0 0 0-6 6c0 3.2-1 4.5-2 5.5h16c-1-1-2-2.3-2-5.5a6 6 0 0 0-6-6Z"></path><path d="M10.3 19.5a2 2 0 0 0 3.4 0"></path></svg>
         <span id="alarmPillText">No alarms enabled</span>
-      </div>
+      </button>
       <div class="pill pill--vacation" id="skipPill" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="1.5"></rect><path d="M9 8V6a3 3 0 0 1 3-3v0a3 3 0 0 1 3 3v2"></path></svg>
         <span id="skipPillText">Skipped</span>
@@ -335,7 +351,7 @@
     </div>
   </div>
 
-  <div class="clock" aria-live="off">
+  <div class="clock" id="clockLink" role="button" tabindex="0" aria-label="Manage alarms" aria-live="off">
     <div class="flap-group" id="hourGroup"></div>
     <div class="colon"><span></span><span></span></div>
     <div class="flap-group" id="minuteGroup"></div>

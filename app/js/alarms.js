@@ -8,7 +8,6 @@
 
   var SVGNS = "http://www.w3.org/2000/svg";
   var CX = 120, CY = 120, LABEL_R = 92;
-  var ALARM_PREFIX = ConfigStore.FIXED.alarmPrefix; // "kiosk_alarm_"
   var DAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
   var dial = document.getElementById("dial");
@@ -319,48 +318,67 @@
     });
   }
 
+  // Which schedule/input_boolean pairs are "ours" is tracked explicitly in
+  // ConfigStore (see its comment) rather than inferred from a naming
+  // prefix, since WS-created helpers get an HA-generated id we don't
+  // control. schedule/list is the WebSocket equivalent of the REST config
+  // GET this used to use — it's the only source for a schedule's actual
+  // weekday/time blocks (entity *state* doesn't carry them).
   function fetchAlarms() {
-    return HAClient.getStates().then(function (res) {
-      if (!res.ok || !Array.isArray(res.data)) return [];
+    var managed = ConfigStore.listManagedAlarms();
+    if (!managed.length) return Promise.resolve([]);
 
-      var schedules = res.data.filter(function (e) {
-        return e.entity_id.indexOf("schedule." + ALARM_PREFIX) === 0;
-      });
+    var wsCfg = ConfigStore.load();
+    return Promise.all([
+      HAWebSocket.call(wsCfg, "schedule/list"),
+      HAClient.getStates()
+    ]).then(function (results) {
+      var scheduleList = results[0] || [];
+      var statesRes = results[1];
       var boolStates = {};
-      res.data.forEach(function (e) {
-        if (e.entity_id.indexOf("input_boolean." + ALARM_PREFIX) === 0) boolStates[e.entity_id] = e.state;
-      });
+      if (statesRes.ok && Array.isArray(statesRes.data)) {
+        statesRes.data.forEach(function (e) { boolStates[e.entity_id] = e.state; });
+      }
 
-      var configFetches = schedules.map(function (e) {
-        var objectId = e.entity_id.slice("schedule.".length);
-        return HAClient.getHelperConfig("schedule", objectId).then(function (cfgRes) {
-          var boolId = "input_boolean." + objectId + "_enabled";
-          var parsed = cfgRes.ok ? parseSchedulePayload(cfgRes.data) : { hour: 7, minute: 0, ampm: "AM", days: [false, false, false, false, false, false, false] };
-          return {
-            objectId: objectId,
-            scheduleId: e.entity_id,
-            boolId: boolId,
-            label: (cfgRes.ok && cfgRes.data.name) || e.attributes.friendly_name || objectId,
-            hour: parsed.hour,
-            minute: parsed.minute,
-            ampm: parsed.ampm,
-            days: parsed.days,
-            enabled: boolStates[boolId] === "on"
-          };
+      var byId = {};
+      scheduleList.forEach(function (item) { byId[item.id] = item; });
+
+      var alarms = [];
+      managed.forEach(function (m) {
+        var objectId = m.scheduleId.slice("schedule.".length);
+        var item = byId[objectId];
+        if (!item) return; // deleted directly in HA outside the app — drop it
+        var parsed = parseSchedulePayload(item);
+        alarms.push({
+          objectId: objectId,
+          scheduleId: m.scheduleId,
+          boolId: m.boolId,
+          label: item.name || objectId,
+          hour: parsed.hour,
+          minute: parsed.minute,
+          ampm: parsed.ampm,
+          days: parsed.days,
+          enabled: boolStates[m.boolId] === "on"
         });
       });
-
-      return Promise.all(configFetches);
+      return alarms;
     });
   }
 
   function refreshList() {
-    fetchAlarms().then(renderAlarms);
+    var listStatus = document.getElementById("listStatus");
+    fetchAlarms().then(function (alarms) {
+      listStatus.textContent = "";
+      renderAlarms(alarms);
+    }).catch(function (err) {
+      listStatus.textContent = "✗ Couldn't load alarms: " + err.message;
+    });
   }
 
   /* ---------- editor open/close/save/delete ---------- */
 
   function openEditor(alarm) {
+    document.getElementById("sheetStatus").textContent = "";
     editingAlarm = alarm;
     if (alarm) {
       state.hour = alarm.hour;
@@ -397,34 +415,51 @@
     editingAlarm = null;
   }
 
-  function nextFreeAlarmId(alarms) {
-    var maxN = 0;
-    alarms.forEach(function (a) {
-      var m = /^kiosk_alarm_(\d+)$/.exec(a.objectId);
-      if (m) maxN = Math.max(maxN, parseInt(m[1], 10));
-    });
-    return ALARM_PREFIX + (maxN + 1);
+  // HAClient (REST) never rejects on an HTTP error status — it resolves
+  // with { ok:false, status, data }. Used for the one REST call still in
+  // this flow (input_boolean.turn_on, a normal service call, not a
+  // Config-API write).
+  function assertOk(res, what) {
+    if (!res.ok) {
+      var detail = (res.data && (res.data.message || JSON.stringify(res.data))) || res.error || ("HTTP " + res.status);
+      throw new Error(what + " failed: " + detail);
+    }
+    return res;
   }
 
   function applySave() {
     var label = labelInput.value || "Alarm";
-    var payload = buildSchedulePayload(label);
+    var payload = buildSchedulePayload(label); // {name, icon, monday: [...], ...}
     var saveBtn = document.getElementById("saveBtn");
+    var status = document.getElementById("sheetStatus");
+    status.textContent = "";
     saveBtn.disabled = true;
+    var wsCfg = ConfigStore.load();
 
     var work;
     if (editingAlarm) {
-      work = HAClient.upsertHelperConfig("schedule", editingAlarm.objectId, payload).then(function () {
+      var updatePayload = { schedule_id: editingAlarm.objectId };
+      Object.keys(payload).forEach(function (k) { updatePayload[k] = payload[k]; });
+      work = HAWebSocket.call(wsCfg, "schedule/update", updatePayload).then(function () {
         ConfigStore.setAlarmSound(editingAlarm.scheduleId, state.sound);
       });
     } else {
-      work = fetchAlarms().then(function (alarms) {
-        var objectId = nextFreeAlarmId(alarms);
-        var boolObjectId = objectId + "_enabled";
-        return HAClient.upsertHelperConfig("schedule", objectId, payload)
-          .then(function () { return HAClient.upsertHelperConfig("input_boolean", boolObjectId, { name: label + " Enabled", icon: "mdi:toggle-switch" }); })
-          .then(function () { return HAClient.callService("input_boolean", "turn_on", { entity_id: "input_boolean." + boolObjectId }); })
-          .then(function () { ConfigStore.setAlarmSound("schedule." + objectId, state.sound); });
+      work = HAWebSocket.call(wsCfg, "schedule/create", payload).then(function (scheduleResult) {
+        var scheduleObjectId = scheduleResult && scheduleResult.id;
+        if (!scheduleObjectId) throw new Error("HA created the schedule but didn't return its id");
+        var scheduleId = "schedule." + scheduleObjectId;
+
+        return HAWebSocket.call(wsCfg, "input_boolean/create", { name: label + " Enabled", icon: "mdi:toggle-switch" })
+          .then(function (boolResult) {
+            var boolObjectId = boolResult && boolResult.id;
+            if (!boolObjectId) throw new Error("HA created the enabled switch but didn't return its id");
+            var boolId = "input_boolean." + boolObjectId;
+            return HAClient.callService("input_boolean", "turn_on", { entity_id: boolId }).then(function (res) {
+              assertOk(res, "Enabling new alarm");
+              ConfigStore.addManagedAlarm(scheduleId, boolId);
+              ConfigStore.setAlarmSound(scheduleId, state.sound);
+            });
+          });
       });
     }
 
@@ -432,20 +467,30 @@
       saveBtn.disabled = false;
       closeEditor();
       refreshList();
-    }).catch(function () {
+    }).catch(function (err) {
       saveBtn.disabled = false;
+      status.textContent = "✗ " + err.message;
     });
   }
 
   function applyDelete() {
     if (!editingAlarm) return;
     var alarm = editingAlarm;
-    HAClient.deleteHelperConfig("schedule", alarm.objectId)
-      .then(function () { return HAClient.deleteHelperConfig("input_boolean", alarm.objectId + "_enabled"); })
+    var status = document.getElementById("sheetStatus");
+    status.textContent = "";
+    var wsCfg = ConfigStore.load();
+    var boolObjectId = alarm.boolId.slice("input_boolean.".length);
+
+    HAWebSocket.call(wsCfg, "schedule/delete", { schedule_id: alarm.objectId })
+      .then(function () { return HAWebSocket.call(wsCfg, "input_boolean/delete", { input_boolean_id: boolObjectId }); })
       .then(function () {
+        ConfigStore.removeManagedAlarm(alarm.scheduleId);
         ConfigStore.removeAlarmSound(alarm.scheduleId);
         closeEditor();
         refreshList();
+      })
+      .catch(function (err) {
+        status.textContent = "✗ " + err.message;
       });
   }
 
@@ -453,6 +498,20 @@
   document.getElementById("saveBtn").addEventListener("click", applySave);
   deleteBtn.addEventListener("click", applyDelete);
   backdrop.addEventListener("click", function (evt) { if (evt.target === backdrop) closeEditor(); });
+
+  document.getElementById("testTimeBtn").addEventListener("click", function () {
+    var now = new Date(Date.now() + 60 * 1000);
+    var h = now.getHours();
+    state.ampm = h >= 12 ? "PM" : "AM";
+    state.hour = h % 12 === 0 ? 12 : h % 12;
+    state.minute = now.getMinutes();
+    // Also select every day so the very next occurrence is guaranteed to
+    // be tomorrow-through-today rather than needing a specific weekday.
+    state.days = [true, true, true, true, true, true, true];
+    dayChipButtons.forEach(function (b) { b.classList.add("is-active"); });
+    updateHeader();
+    renderDial();
+  });
 
   addAlarmRow.addEventListener("click", function () { openEditor(null); });
   addAlarmBtn.addEventListener("click", function () { openEditor(null); });

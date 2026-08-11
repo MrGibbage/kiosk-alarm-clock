@@ -2,4 +2,9 @@
 	root * /srv/app
 	file_server
 	encode gzip
+	# No Cache-Control was being sent at all, which left browsers free to
+	# use their own heuristics — reloading the page could still serve a
+	# stale cached main.js. Force revalidation on every request; ETag/
+	# Last-Modified still let unchanged files come back as a cheap 304.
+	header Cache-Control "no-cache"
 }

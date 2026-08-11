@@ -146,13 +146,41 @@ reference, not wired to anything live.
   browser's `localStorage`, keyed by that alarm's `schedule.*` entity_id.
   Not an HA helper — avoids having to keep an `input_select`'s options in
   sync with whatever files actually exist in `media/`.
-- **Built 2026-08-10, with one change from the original plan**: "Add
-  alarm" creates a brand-new `schedule.kiosk_alarm_<n>` +
-  `input_boolean.kiosk_alarm_<n>_enabled` pair live via HA's Config REST
-  API, rather than claiming a slot from a pre-provisioned fixed pool — see
-  **Secrets** below for why that requires an admin-scoped token, and the
-  tradeoff Skip accepted to get true unlimited alarms instead of a fixed
-  ceiling.
+- **Built 2026-08-10, with two changes from the original plan.** First:
+  "Add alarm" creates a new `schedule` + `input_boolean` pair live rather
+  than claiming a slot from a pre-provisioned fixed pool — see **Secrets**
+  below for why that requires an admin-scoped token, and the tradeoff
+  Skip accepted to get true unlimited alarms instead of a fixed ceiling.
+  Second, discovered 2026-08-11 while actually testing this end to end:
+  the REST **Config API** (`/api/config/<domain>/config/<id>`) this was
+  originally built against **doesn't exist in this HA version at all** —
+  confirmed via live 404s on both `schedule` and `input_boolean`. HA has
+  moved structured helpers like `schedule` to dedicated **WebSocket**
+  commands instead (`schedule/create`, `schedule/update`,
+  `schedule/delete`, `schedule/list`; `input_boolean/create`,
+  `input_boolean/delete`) — the same commands HA's own frontend Helpers UI
+  uses, implemented in `app/js/ha-ws-client.js`. WebSocket connections
+  aren't subject to the browser's CORS/Same-Origin restrictions the way
+  `fetch()` is, so this also sidesteps needing any further CORS
+  configuration for these calls.
+  - **Consequence**: HA generates each new helper's `object_id` itself
+    (slugified from the name given at creation — e.g. `schedule.new_alarm`
+    for the label "New Alarm"), not a `kiosk_alarm_<n>` id the app picks.
+    Which schedule/input_boolean pairs are "this app's alarms" is
+    therefore tracked explicitly in the browser's `localStorage`
+    (`ConfigStore.listManagedAlarms()`), not inferred from a naming
+    prefix.
+  - **Consequence for the HA automation** (`automation/kiosk_alarm.yaml`
+    on the `homeassistant` host): it can no longer match alarms by
+    `entity_id` prefix either. It instead matches the firing schedule by
+    its `icon` attribute (`mdi:alarm`, set by the app on every
+    create/update) and finds the paired enabled/disabled `input_boolean`
+    by `friendly_name` (`"<alarm label> Enabled"`) rather than by a
+    derived `entity_id` — both values the app fully controls, so this
+    stays robust regardless of what object_id HA assigns.
+  - Verified working end-to-end 2026-08-11: create, edit (`schedule/update`),
+    delete, and a real scheduled fire all confirmed live against the
+    `homeassistant` host.
 
 ### HA reliability / connection status (decided 2026-08-07)
 
@@ -207,14 +235,16 @@ place (harmless, matches the homelab-wide `{service-name}.env`
 convention) in case a server-side secret is ever needed later.
 
 Secret needed: an HA long-lived access token, so the page can call HA's
-REST API directly from the browser (entered via the Settings screen,
-stored in that browser's `localStorage` — see Architecture). **Revised
-2026-08-10 from the original 2026-08-07 decision**: the token must be
-**admin-scoped**, not narrowly-scoped as first planned. Reason: "Add
-alarm" creates/deletes real `schedule`/`input_boolean` helpers via HA's
-Config REST API at runtime (see Multi-alarm data model), and that API
-requires `is_admin` — HA has no narrower permission tier for "can manage
-helpers but nothing else." Skip explicitly chose this over a fixed
+REST and WebSocket APIs directly from the browser (entered via the
+Settings screen, stored in that browser's `localStorage` — see
+Architecture). **Revised 2026-08-10 from the original 2026-08-07
+decision**: the token must be **admin-scoped**, not narrowly-scoped as
+first planned. Reason: "Add alarm" creates/deletes real
+`schedule`/`input_boolean` helpers via HA's WebSocket API at runtime (see
+Multi-alarm data model — originally assumed to be the REST Config API,
+corrected 2026-08-11 once that turned out not to exist), and helper CRUD
+requires `is_admin` either way — HA has no narrower permission tier for
+"can manage helpers but nothing else." Skip explicitly chose this over a fixed
 pre-provisioned alarm-slot pool (which would have kept the token
 non-admin) to get true unlimited alarms. Mitigation unchanged from the
 original decision: still mint it from its own **dedicated** HA user, not
@@ -258,6 +288,22 @@ committed to git — copyright-distribution risk for a public GitHub repo,
 plus general dislike of binary assets in version control. They live only
 on docker-server (see `.gitignore`); the repo references filenames, not
 the files themselves.
+
+## Backlog / planned improvements
+
+- **Configurable buttons, not fixed labels/icons.** Raised 2026-08-11:
+  Lighting & Control's cards and the main screen's tiles currently have
+  hardcoded labels/icons per slot (Settings only lets you point each slot
+  at a different entity, not rename it or change its icon).
+- **Entity picker instead of typed IDs.** Settings currently requires
+  typing a raw entity_id and validating it. Skip wants a filterable
+  dropdown over the *entire* list of HA actions/entities — the same UX
+  as Android's Home Assistant home-screen widget picker — instead of
+  needing to already know the exact entity_id.
+- **A reusable per-button settings screen.** Longer-term direction for
+  the two items above: one shared "configure this button" screen (icon
+  picker + label + entity/action picker) that every tile/card opens into
+  for its own slot, rather than one flat list of fields in Settings.
 
 ## Status
 

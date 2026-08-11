@@ -78,8 +78,7 @@ var ConfigStore = (function () {
     skipUntil: "input_datetime.kiosk_alarm_skip_until",
     ringing: "input_boolean.kiosk_alarm_ringing",
     ringingSource: "input_text.kiosk_alarm_ringing_source",
-    snoozeTimer: "timer.kiosk_alarm_snooze",
-    alarmPrefix: "kiosk_alarm_" // schedule.kiosk_alarm_<n> / input_boolean.kiosk_alarm_<n>_enabled
+    snoozeTimer: "timer.kiosk_alarm_snooze"
   };
 
   // Per-alarm sound selection — see README's "local config file" decision.
@@ -107,6 +106,28 @@ var ConfigStore = (function () {
     localStorage.setItem(SOUND_MAP_KEY, JSON.stringify(map));
   }
 
+  // Which schedule/input_boolean pairs are "our" alarms. The old REST
+  // Config API let us pick the object_id ourselves (e.g. kiosk_alarm_3),
+  // so prefix-matching entity_ids was enough to find them. HA's WebSocket
+  // create commands generate their own id instead, so identity has to be
+  // tracked explicitly here rather than inferred from naming.
+  var MANAGED_ALARMS_KEY = "kioskAlarmClock.managedAlarms.v1";
+
+  function listManagedAlarms() {
+    try { return JSON.parse(localStorage.getItem(MANAGED_ALARMS_KEY)) || []; } catch (e) { return []; }
+  }
+
+  function addManagedAlarm(scheduleId, boolId) {
+    var list = listManagedAlarms();
+    list.push({ scheduleId: scheduleId, boolId: boolId });
+    localStorage.setItem(MANAGED_ALARMS_KEY, JSON.stringify(list));
+  }
+
+  function removeManagedAlarm(scheduleId) {
+    var list = listManagedAlarms().filter(function (a) { return a.scheduleId !== scheduleId; });
+    localStorage.setItem(MANAGED_ALARMS_KEY, JSON.stringify(list));
+  }
+
   return {
     FIELDS: FIELDS,
     FIXED: FIXED,
@@ -117,6 +138,9 @@ var ConfigStore = (function () {
     validateEntity: validateEntity,
     getAlarmSound: getAlarmSound,
     setAlarmSound: setAlarmSound,
-    removeAlarmSound: removeAlarmSound
+    removeAlarmSound: removeAlarmSound,
+    listManagedAlarms: listManagedAlarms,
+    addManagedAlarm: addManagedAlarm,
+    removeManagedAlarm: removeManagedAlarm
   };
 })();

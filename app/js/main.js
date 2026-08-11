@@ -146,14 +146,28 @@
   var skipPillText = document.getElementById("skipPillText");
   var FIXED = ConfigStore.FIXED;
 
+  function goToAlarms() { window.location.href = "alarms.html"; }
+
+  document.getElementById("alarmPill").addEventListener("click", goToAlarms);
+
+  var clockLink = document.getElementById("clockLink");
+  clockLink.addEventListener("click", goToAlarms);
+  clockLink.addEventListener("keydown", function (evt) {
+    if (evt.key === "Enter" || evt.key === " ") { evt.preventDefault(); goToAlarms(); }
+  });
+
   function refreshPills() {
+    // Which booleans are "our" alarms is tracked in ConfigStore, not
+    // inferred by prefix — alarms are created via HA's WebSocket API,
+    // which assigns its own id (e.g. input_boolean.new_alarm_enabled),
+    // not the kiosk_alarm_N naming the old REST-based design used.
+    var managedBoolIds = ConfigStore.listManagedAlarms().map(function (a) { return a.boolId; });
+
     HAClient.getStates().then(function (res) {
       if (!res.ok || !Array.isArray(res.data)) return;
 
       var enabledCount = res.data.filter(function (e) {
-        return e.entity_id.indexOf("input_boolean." + FIXED.alarmPrefix) === 0 &&
-          e.entity_id.slice(-"_enabled".length) === "_enabled" &&
-          e.state === "on";
+        return managedBoolIds.indexOf(e.entity_id) !== -1 && e.state === "on";
       }).length;
       // Counting enabled alarms rather than computing a precise "next
       // alarm time" — HA schedule helpers don't reliably expose a single
