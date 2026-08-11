@@ -156,6 +156,19 @@
     if (evt.key === "Enter" || evt.key === " ") { evt.preventDefault(); goToAlarms(); }
   });
 
+  skipPill.addEventListener("click", function () {
+    // input_datetime has no "clear" service — setting it to yesterday is
+    // what actually cancels the skip, since the automation's condition is
+    // "skip_until < today". Tapping Skip Tonight again re-arms it fine.
+    var yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    var iso = yesterday.toISOString().slice(0, 10);
+    HAClient.callService("input_datetime", "set_datetime", {
+      entity_id: FIXED.skipUntil,
+      date: iso
+    }).then(refreshPills);
+  });
+
   function refreshPills() {
     // Which booleans are "our" alarms is tracked in ConfigStore, not
     // inferred by prefix — alarms are created via HA's WebSocket API,
