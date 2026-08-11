@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Kiosk Alarm Clock — Lighting &amp; Control</title>
+<link rel="stylesheet" href="css/tokens.css">
+<style>
+  .stage {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100vh;
+    padding: clamp(1rem, 2.5vw, 1.75rem);
+  }
+
+  .app-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding-bottom: clamp(0.75rem, 2vw, 1.25rem);
+  }
+
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 999px;
+    border: none;
+    background: var(--panel);
+    cursor: pointer;
+    flex: none;
+  }
+
+  .icon-btn svg { width: 1.2rem; height: 1.2rem; }
+
+  .app-bar h1 {
+    flex: 1;
+    margin: 0;
+    font-family: Georgia, "Noto Serif", "Times New Roman", serif;
+    font-size: clamp(1.3rem, 2.4vw, 1.7rem);
+    font-weight: 400;
+  }
+
+  .card-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(0.9rem, 2.2vw, 1.5rem);
+    max-width: 54rem;
+    width: 100%;
+    margin: auto auto;
+  }
+
+  .control-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    padding: clamp(1.5rem, 4vw, 2.5rem) 1rem;
+    border-radius: 1rem;
+    border: none;
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+    box-shadow: 0 1px 0 var(--shadow) inset, 0 3px 10px var(--shadow);
+    transition: transform 120ms ease, background 120ms ease;
+  }
+
+  .control-card:active {
+    transform: translateY(2px) scale(0.98);
+    background: var(--panel-2);
+  }
+
+  .control-card svg {
+    width: clamp(2rem, 5vw, 2.6rem);
+    height: clamp(2rem, 5vw, 2.6rem);
+    color: var(--accent);
+  }
+
+  .control-card .card-name {
+    font-size: clamp(1rem, 2vw, 1.2rem);
+    font-weight: 500;
+  }
+
+  .control-card .card-state {
+    font-size: clamp(0.75rem, 1.4vw, 0.9rem);
+    color: var(--muted);
+    letter-spacing: 0.03em;
+  }
+
+  .icon-btn:focus-visible,
+  .control-card:focus-visible,
+  .onoff-btn:focus-visible,
+  .fan-btn:focus-visible,
+  .btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    background: color-mix(in srgb, var(--hinge) 55%, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease;
+    z-index: 10;
+  }
+
+  .backdrop.is-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .dialog {
+    width: min(20rem, 88vw);
+    background: var(--panel);
+    border-radius: 1rem;
+    padding: clamp(1.2rem, 2.4vw, 1.75rem);
+    box-shadow: 0 20px 50px var(--shadow);
+    transform: scale(0.94) translateY(10px);
+    opacity: 0;
+    transition: transform 160ms ease, opacity 160ms ease;
+    text-align: center;
+  }
+
+  .backdrop.is-open .dialog {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .backdrop, .dialog { transition: none; }
+  }
+
+  .dialog h2 {
+    margin: 0 0 clamp(1rem, 2.4vw, 1.5rem);
+    font-family: Georgia, "Noto Serif", "Times New Roman", serif;
+    font-size: clamp(1.3rem, 2.4vw, 1.6rem);
+    font-weight: 400;
+  }
+
+  .slider-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: clamp(1rem, 2.4vw, 1.5rem);
+  }
+
+  .v-slider-track {
+    position: relative;
+    width: 2.75rem;
+    height: 13rem;
+    border-radius: 999px;
+    background: var(--panel-2);
+    touch-action: none;
+    cursor: pointer;
+  }
+
+  .v-slider-fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 999px;
+    background: var(--accent);
+    opacity: 0.55;
+  }
+
+  .v-slider-thumb {
+    position: absolute;
+    left: 50%;
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 999px;
+    background: var(--accent);
+    box-shadow: 0 2px 8px var(--shadow);
+    transform: translate(-50%, 50%);
+  }
+
+  .slider-value {
+    font-family: Georgia, "Noto Serif", "Times New Roman", serif;
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(1.6rem, 3.6vw, 2rem);
+    min-width: 4ch;
+  }
+
+  .onoff-row {
+    display: flex;
+    gap: 0.6rem;
+    margin-bottom: clamp(1rem, 2.4vw, 1.5rem);
+  }
+
+  .onoff-btn {
+    flex: 1;
+    padding: 0.6rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--panel-3);
+    background: var(--panel-2);
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    letter-spacing: 0.04em;
+  }
+
+  .onoff-btn.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  .btn {
+    padding: 0.65rem 1.1rem;
+    border-radius: 0.5rem;
+    border: none;
+    cursor: pointer;
+    font-size: 0.95rem;
+    width: 100%;
+  }
+
+  .btn--primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+
+  .fan-btn {
+    display: block;
+    width: 100%;
+    padding: 0.85rem;
+    margin-bottom: 0.6rem;
+    border-radius: 0.6rem;
+    border: 1px solid var(--panel-3);
+    background: var(--panel-2);
+    color: var(--ink);
+    cursor: pointer;
+    font-size: 1rem;
+    letter-spacing: 0.02em;
+  }
+
+  .fan-btn.is-selected {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+
+  .fan-btn:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="app-bar">
+    <button class="icon-btn" type="button" id="backBtn" aria-label="Back to clock">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 19 8 12l7-7"></path></svg>
+    </button>
+    <h1>Lighting &amp; Control</h1>
+  </div>
+
+  <div class="card-grid">
+    <button class="control-card" type="button" id="fanCard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="1.6"></circle><path d="M12 12c0-4 2-7 5-7 1 2 0 5-5 7Z"></path><path d="M12 12c-4 1-7-1-7-4 2-2 5-1 7 4Z"></path><path d="M12 12c1 4-1 7-4 7-2-1-1-5 4-7Z"></path></svg>
+      <span class="card-name">Ceiling Fan</span>
+      <span class="card-state" id="fanCardState">…</span>
+    </button>
+
+    <button class="control-card" type="button" id="skipCard" data-light="skip" data-name="Skip's Light">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10l-3 6h3l-7 9 1.5-6.5H8L7 4Z"></path></svg>
+      <span class="card-name">Skip's Light</span>
+      <span class="card-state" data-state-for="skip">…</span>
+    </button>
+
+    <button class="control-card" type="button" id="suzanneCard" data-light="suzanne" data-name="Suzanne's Light">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10l-3 6h3l-7 9 1.5-6.5H8L7 4Z"></path></svg>
+      <span class="card-name">Suzanne's Light</span>
+      <span class="card-state" data-state-for="suzanne">…</span>
+    </button>
+  </div>
+</div>
+
+<div class="backdrop" id="lightBackdrop">
+  <div class="dialog" role="dialog" aria-modal="true" id="lightDialog">
+    <h2 id="lightDialogTitle">Light</h2>
+    <div class="slider-row">
+      <div class="v-slider-track" id="brightnessTrack">
+        <div class="v-slider-fill" id="brightnessFill"></div>
+        <div class="v-slider-thumb" id="brightnessThumb"></div>
+      </div>
+      <span class="slider-value" id="brightnessValue">0%</span>
+    </div>
+    <div class="onoff-row">
+      <button class="onoff-btn" id="lightOnBtn" type="button">ON</button>
+      <button class="onoff-btn" id="lightOffBtn" type="button">OFF</button>
+    </div>
+    <button class="btn btn--primary" id="lightDoneBtn" type="button">Done</button>
+  </div>
+</div>
+
+<div class="backdrop" id="fanBackdrop">
+  <div class="dialog" role="dialog" aria-modal="true">
+    <h2>Ceiling Fan</h2>
+    <button class="fan-btn" type="button" data-speed="max">Max</button>
+    <button class="fan-btn" type="button" data-speed="med">Med</button>
+    <button class="fan-btn" type="button" data-speed="low">Low</button>
+    <button class="fan-btn" type="button" data-speed="off">Off</button>
+  </div>
+</div>
+
+<script src="js/config-store.js"></script>
+<script src="js/ha-client.js"></script>
+<script src="js/lighting.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+[
+  { "id": "chimes", "name": "Chimes", "type": "audio", "file": "chimes.mp3" },
+  { "id": "gentle-wake", "name": "Gentle Wake", "type": "audio", "file": "gentle-wake.mp3" },
+  { "id": "morning-birds", "name": "Morning Birds", "type": "audio", "file": "morning-birds.mp3" },
+  { "id": "classic-bell", "name": "Classic Bell", "type": "audio", "file": "classic-bell.mp3" },
+  { "id": "never-gonna-give-you-up", "name": "Never Gonna Give You Up", "type": "video", "file": "never-gonna-give-you-up.mp4" }
+]

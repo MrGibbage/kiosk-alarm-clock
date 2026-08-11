@@ -44,6 +44,19 @@ Deploy target: `/srv/kiosk-alarm-clock` on docker-server
    - **Ceiling Fan**: 4 stacked buttons (Max/Med/Low/Off) — tapping one
      both sets the speed and closes the popup immediately, since
      selecting a speed *is* the complete, discrete action.
+4. **Ringing** (built 2026-08-10, not in the original mockups — designed
+   during scaffolding once the gap was noticed) — full-screen takeover
+   shown whenever `input_boolean.kiosk_alarm_ringing` is on: alarm label,
+   current time, big Snooze/Dismiss buttons, plays the firing alarm's
+   mapped sound/video. Snooze arms `timer.kiosk_alarm_snooze` (9 min) and
+   clears the ringing flag; Dismiss just clears it (and cancels any
+   pending snooze timer).
+5. **Settings** (built 2026-08-10, not in the original mockups) — where
+   the HA base URL/token and every entity ID the app touches (3 main-tile
+   entities, 3 Lighting & Control entities) are entered and validated live
+   against HA (`GET /api/states/<id>` → shows the resolved friendly name
+   or an error) rather than picked from a live dropdown. Persisted in the
+   browser's `localStorage` — see Architecture.
 
 ## Mockups
 
@@ -59,21 +72,37 @@ Claude artifact hosting:
 
 All three share one CSS custom-property token system (split-flap/warm-amber
 palette, serif numerals) so new screens should reuse the same tokens
-rather than inventing a new look per screen.
+rather than inventing a new look per screen. **Built 2026-08-10**: the
+real app lives in `app/` (`css/tokens.css` factors that shared token
+system out of the mockups into one file); `mockups/` is kept as-is for
+reference, not wired to anything live.
 
 ## Architecture
 
-- **Hosting**: Docker container on docker-server, deliberately minimal —
-  a static file server (nginx/Caddy) serving HTML/CSS/JS. No custom backend
-  service.
-- **State**: lives in Home Assistant via `input_helpers` (input_datetime for
-  alarm time, input_boolean/input_text for skip-until date) — not a custom
-  DB. Editable from the HA app, one source of truth.
-- **Alarm decision logic**: an HA automation, not client-side JS. It checks
-  light/motion state and the skip-until date, and pushes a simple state
-  (e.g. "alarm active") that the page watches and reacts to. Keeps the
-  time-critical decision off a browser tab that could crash/reload
-  overnight.
+- **Hosting**: Docker container `kiosk-alarm-clock` on docker-server
+  (`/srv/kiosk-alarm-clock`, port 8850), deliberately minimal — the
+  official `caddy:2-alpine` image bind-mounting `app/` and `media/`
+  straight from the repo, no Dockerfile/build step, no custom backend
+  service. No Caddy-on-OPNsense route added yet (LAN-only device, not
+  urgent — see Holocron page for the live IP:port).
+- **State**: lives in Home Assistant, called directly from the browser —
+  not a custom DB, not proxied through the container above. Per-alarm
+  `schedule`/`input_boolean` helper pairs are created live by the app
+  itself (see Multi-alarm data model); the shared
+  `input_boolean`/`input_datetime`/`input_text`/`timer` helpers below are
+  provisioned once via YAML on the `homeassistant` host, not by the app.
+- **Alarm decision logic**: an HA automation (`automation/kiosk_alarm.yaml`
+  on the `homeassistant` host), not client-side JS. It checks
+  `binary_sensor.bedroom_occupancy` and `input_datetime.kiosk_alarm_skip_until`,
+  and sets `input_boolean.kiosk_alarm_ringing` +
+  `input_text.kiosk_alarm_ringing_source` (which alarm fired), which the
+  page polls every 5s and reacts to by jumping to the Ringing screen.
+  Keeps the time-critical decision off a browser tab that could
+  crash/reload overnight.
+- **Settings, not hardcoded config**: every entity ID and the HA
+  URL/token live in the browser's `localStorage`, entered via the
+  Settings screen — nothing is baked into the container image, so a
+  freshly deployed container is blank until Settings is filled in.
 - **Sound/video**: browser-served static assets bundled in the container
   (not Android system sounds) — swap files in, no rebuild needed. Autoplay
   is handled by running inside **Fully Kiosk Browser**, which can disable
@@ -111,10 +140,19 @@ rather than inventing a new look per screen.
   separate per-alarm `enabled` toggle (in the Alarms screen) exists for
   longer-lived decisions like "permanently disable my weekend alarm."
 - **Sound**: each alarm stores which uploaded audio/video file to play
-  (see Alarms screen mockup's sound picker). Storage mechanism (HA
-  helper vs. static per-alarm config) not yet decided — revisit when
-  scaffolding the container, since it depends on whether alarm records
-  end up in HA or a local config file.
+  (see Alarms screen mockup's sound picker). Decided 2026-08-10: a local
+  config file — a static `js/sounds.json` manifest (id/name/type/filename)
+  ships with the app, and each alarm's chosen sound id is stored in the
+  browser's `localStorage`, keyed by that alarm's `schedule.*` entity_id.
+  Not an HA helper — avoids having to keep an `input_select`'s options in
+  sync with whatever files actually exist in `media/`.
+- **Built 2026-08-10, with one change from the original plan**: "Add
+  alarm" creates a brand-new `schedule.kiosk_alarm_<n>` +
+  `input_boolean.kiosk_alarm_<n>_enabled` pair live via HA's Config REST
+  API, rather than claiming a slot from a pre-provisioned fixed pool — see
+  **Secrets** below for why that requires an admin-scoped token, and the
+  tradeoff Skip accepted to get true unlimited alarms instead of a fixed
+  ceiling.
 
 ### HA reliability / connection status (decided 2026-08-07)
 
@@ -133,7 +171,11 @@ Instead:
 - **Fail open, not closed**: if the "already up" light-state check can't
   reach HA, default to *sounding* the alarm rather than silently
   skipping it — a false alarm is annoying, a missed one is much worse.
-  (Not yet implemented — note for when the HA automation is built.)
+  **Built 2026-08-10** as part of the `kiosk_alarm.yaml` automation: the
+  condition gating the alarm is `binary_sensor.bedroom_occupancy != 'on'`,
+  which is true (alarm sounds) whenever the sensor reads `off`,
+  `unavailable`, or `unknown` alike — fails open for free, no separate
+  error-handling branch needed.
 - **Connection status icon** on the main screen (stylized house glyph,
   in the spirit of the HA logo, themed to the app's palette rather than
   reproducing it) — normal in the app's accent color when connected; a
@@ -156,34 +198,31 @@ Instead:
 
 ## Secrets
 
-**No secrets in the compose file.** Secret lives in
-`/etc/homelab/kiosk-alarm-clock.env` (owner `root:988`, mode `640`) —
-this is the standard homelab-wide convention (every docker service on
-docker-server has a matching `{service-name}.env` there), not something
-specific to this project. Referenced in compose with an absolute path
-since it's outside the project directory:
-
-```yaml
-services:
-  kiosk-alarm-clock:
-    env_file: /etc/homelab/kiosk-alarm-clock.env
-```
-
-This location is also structurally protected from Claude: the
-homelab-mcp secret-path guard blocks every MCP tool (`ssh_exec`,
-`grep_file`, `read_file`, `write_file`, ...) from reading *or writing*
-anything under `/etc/homelab/`, regardless of filename — confirmed
-2026-08-07 by testing against this exact path before adopting it. Create
-and edit this file by SSHing in directly, not by asking Claude to do it.
+**No secrets in the compose file, and — as it turned out — none needed
+server-side at all.** `/etc/homelab/kiosk-alarm-clock.env` was created
+2026-08-07 anticipating one, but the container's `compose.yml` doesn't
+reference it: every HA call happens straight from the browser to HA, so
+there's nothing for the container itself to hold. The file is left in
+place (harmless, matches the homelab-wide `{service-name}.env`
+convention) in case a server-side secret is ever needed later.
 
 Secret needed: an HA long-lived access token, so the page can call HA's
-REST/WebSocket API directly from the browser. Decided 2026-08-07: mint a
-**dedicated, narrowly-scoped token** from a restricted HA user (only the
-entities this clock needs — lights/motion sensors, not full admin) rather
-than reusing homelab-mcp's own HA token or building a server-side proxy.
-The token will be embedded in client-side config and is readable via
-view-source on the tablet — acceptable risk for a LAN-only device behind
-Fully Kiosk's own device-admin PIN, given the token's scope is limited.
+REST API directly from the browser (entered via the Settings screen,
+stored in that browser's `localStorage` — see Architecture). **Revised
+2026-08-10 from the original 2026-08-07 decision**: the token must be
+**admin-scoped**, not narrowly-scoped as first planned. Reason: "Add
+alarm" creates/deletes real `schedule`/`input_boolean` helpers via HA's
+Config REST API at runtime (see Multi-alarm data model), and that API
+requires `is_admin` — HA has no narrower permission tier for "can manage
+helpers but nothing else." Skip explicitly chose this over a fixed
+pre-provisioned alarm-slot pool (which would have kept the token
+non-admin) to get true unlimited alarms. Mitigation unchanged from the
+original decision: still mint it from its own **dedicated** HA user, not
+shared with any other integration/token, so a leak is scoped to "this HA
+instance" specifically. The token is embedded in client-side config and
+readable via view-source on the tablet — accepted risk for a LAN-only
+device behind Fully Kiosk's own device-admin PIN, now carrying more
+blast radius than originally scoped, but still isolated to its own user.
 
 ## Multiple instances (e.g. a second clock for another family member)
 
@@ -222,12 +261,28 @@ the files themselves.
 
 ## Status
 
-Design/planning phase. No application code written yet. Repo initialized
-in `/srv/kiosk-alarm-clock`, committed, and pushed to
-`github.com/MrGibbage/kiosk-alarm-clock` (`main` branch) on 2026-08-07.
-Directory chowned to `skip:skip`, HA token secret file created. Three
-mockups built and saved (see Mockups above) — main screen, alarms, and
-Lighting & Control are all visually/interactively settled. Remaining
-open item before scaffolding: where per-alarm sound selection is stored
-(HA helper vs. local config — see Multi-alarm data model above). Next
-session: start building the real container/frontend.
+**Real app built and deployed 2026-08-10.** All 5 screens
+(`app/index.html`, `alarms.html`, `lighting.html`, `ringing.html`,
+`settings.html`) are wired to live HA state — not mockups anymore. The
+`kiosk-alarm-clock` container is running on docker-server
+(`http://192.168.0.231:8850`, see the Holocron page under
+`docker-server/docker-services/kiosk-alarm-clock.md` for deploy/hardening
+detail). The `homeassistant` host has the supporting
+`input_boolean`/`input_datetime`/`input_text`/`timer` helpers and the
+`kiosk_alarm.yaml` automation live (added via YAML + domain `.reload`,
+verified with `ha_get_states`/`ha_list_automations`).
+
+**Not usable yet** — two manual steps only Skip can do:
+1. Mint the dedicated **admin-scoped** HA long-lived token (see Secrets —
+   scope requirement changed this session) from its own restricted-but-
+   admin HA user.
+2. Open the app, go to Settings, enter the HA base URL + that token, and
+   the 6 entity IDs the app touches (2 duplicate "Ceiling Fan" and 2
+   duplicate "Master Bedroom Fan Light" entities were found live in HA —
+   pick the real ones there; Settings validates each field against HA
+   live).
+
+Also open: no Caddy-on-OPNsense route/friendly hostname yet (reachable by
+IP:port for now), and no Glance/Uptime Kuma/DIUN entries — deliberately
+left as a follow-up pending whether a personal bedside device needs that
+visibility infrastructure at all.

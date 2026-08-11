@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Kiosk Alarm Clock — Settings</title>
+<link rel="stylesheet" href="css/tokens.css">
+<style>
+  .stage {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100vh;
+    padding: clamp(1rem, 2.5vw, 1.75rem);
+  }
+
+  .app-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding-bottom: clamp(0.75rem, 2vw, 1.25rem);
+    flex: none;
+  }
+
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 999px;
+    border: none;
+    background: var(--panel);
+    cursor: pointer;
+    flex: none;
+  }
+
+  .icon-btn svg { width: 1.2rem; height: 1.2rem; }
+
+  .app-bar h1 {
+    flex: 1;
+    margin: 0;
+    font-family: Georgia, "Noto Serif", "Times New Roman", serif;
+    font-size: clamp(1.3rem, 2.4vw, 1.7rem);
+    font-weight: 400;
+  }
+
+  .settings-body {
+    flex: 1;
+    overflow-y: auto;
+    max-width: 40rem;
+    width: 100%;
+    margin: 0 auto;
+    padding-bottom: 1rem;
+  }
+
+  .group-title {
+    font-size: 0.8rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 1.5rem 0 0.75rem;
+  }
+
+  .group-title:first-child { margin-top: 0; }
+
+  .field { margin-bottom: 0.9rem; }
+
+  .field-label {
+    display: block;
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+  }
+
+  .field-row {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .label-input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.65rem 0.8rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--panel-3);
+    background: var(--panel-2);
+    color: var(--ink);
+    font-size: 0.95rem;
+    font-family: inherit;
+  }
+
+  .validate-btn {
+    flex: none;
+    padding: 0.5rem 0.9rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--panel-3);
+    background: var(--panel-2);
+    color: var(--ink);
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+
+  .field-status {
+    margin-top: 0.4rem;
+    font-size: 0.8rem;
+    min-height: 1.1em;
+  }
+
+  .field-status[data-state="ok"] { color: #7fbf6a; }
+  .field-status[data-state="error"] { color: #e0685a; }
+  .field-status[data-state="checking"] { color: var(--muted); }
+
+  .save-row {
+    flex: none;
+    display: flex;
+    gap: 0.6rem;
+    padding-top: 0.75rem;
+    max-width: 40rem;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 0.75rem 1.1rem;
+    border-radius: 0.5rem;
+    border: none;
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+
+  .btn--primary { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .btn--ghost { background: var(--panel); color: var(--ink); }
+
+  .icon-btn:focus-visible,
+  .validate-btn:focus-visible,
+  .btn:focus-visible,
+  .label-input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="app-bar">
+    <button class="icon-btn" type="button" id="backBtn" aria-label="Back to clock">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 19 8 12l7-7"></path></svg>
+    </button>
+    <h1>Settings</h1>
+  </div>
+
+  <div class="settings-body" id="fieldContainer"></div>
+
+  <div class="save-row">
+    <button class="btn btn--ghost" type="button" id="validateAllBtn">Validate all</button>
+    <button class="btn btn--primary" type="button" id="saveBtn">Save</button>
+  </div>
+</div>
+
+<script src="js/config-store.js"></script>
+<script src="js/ha-client.js"></script>
+<script>
+  (function () {
+    "use strict";
+
+    var container = document.getElementById("fieldContainer");
+    var cfg = ConfigStore.load();
+    var inputs = {};
+    var lastGroup = null;
+
+    ConfigStore.FIELDS.forEach(function (f) {
+      if (f.group !== lastGroup) {
+        lastGroup = f.group;
+        var h = document.createElement("div");
+        h.className = "group-title";
+        h.textContent = f.group;
+        container.appendChild(h);
+      }
+
+      var field = document.createElement("div");
+      field.className = "field";
+
+      var label = document.createElement("label");
+      label.className = "field-label";
+      label.textContent = f.label;
+      label.setAttribute("for", "field-" + f.key);
+      field.appendChild(label);
+
+      var row = document.createElement("div");
+      row.className = "field-row";
+
+      var input = document.createElement("input");
+      input.className = "label-input";
+      input.id = "field-" + f.key;
+      input.type = f.secret ? "password" : "text";
+      input.placeholder = f.placeholder || "";
+      input.value = cfg[f.key] || "";
+      inputs[f.key] = input;
+      row.appendChild(input);
+
+      // Base URL and token don't map to a single HA entity — nothing to
+      // validate against /api/states for those two.
+      var status = document.createElement("div");
+      status.className = "field-status";
+
+      if (f.key !== "haBaseUrl" && f.key !== "haToken") {
+        var vBtn = document.createElement("button");
+        vBtn.className = "validate-btn";
+        vBtn.type = "button";
+        vBtn.textContent = "Validate";
+        vBtn.addEventListener("click", function () { validateField(f.key); });
+        row.appendChild(vBtn);
+      }
+
+      field.appendChild(row);
+      field.appendChild(status);
+      status.id = "status-" + f.key;
+      container.appendChild(field);
+    });
+
+    function validateField(key) {
+      var status = document.getElementById("status-" + key);
+      var value = inputs[key].value.trim();
+      status.dataset.state = "checking";
+      status.textContent = "Checking…";
+      ConfigStore.validateEntity(value).then(function (res) {
+        if (res.ok) {
+          status.dataset.state = "ok";
+          status.textContent = "✓ " + res.friendlyName;
+        } else {
+          status.dataset.state = "error";
+          status.textContent = "✗ " + res.error;
+        }
+      });
+    }
+
+    document.getElementById("validateAllBtn").addEventListener("click", function () {
+      ConfigStore.FIELDS.forEach(function (f) {
+        if (f.key !== "haBaseUrl" && f.key !== "haToken") validateField(f.key);
+      });
+    });
+
+    document.getElementById("saveBtn").addEventListener("click", function () {
+      var next = {};
+      ConfigStore.FIELDS.forEach(function (f) { next[f.key] = inputs[f.key].value.trim(); });
+      ConfigStore.save(next);
+      window.location.href = "index.html";
+    });
+
+    document.getElementById("backBtn").addEventListener("click", function () {
+      window.location.href = "index.html";
+    });
+  })();
+</script>
+</body>
+</html>
