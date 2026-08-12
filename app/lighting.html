@@ -19,6 +19,7 @@
     align-items: center;
     gap: 0.75rem;
     padding-bottom: clamp(0.75rem, 2vw, 1.25rem);
+    flex: none;
   }
 
   .icon-btn {
@@ -47,7 +48,8 @@
   .card-grid {
     flex: 1;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+    grid-template-rows: repeat(var(--rows, 1), minmax(0, 1fr));
     gap: clamp(0.9rem, 2.2vw, 1.5rem);
     max-width: 54rem;
     width: 100%;
@@ -266,25 +268,7 @@
     <h1>Lighting &amp; Control</h1>
   </div>
 
-  <div class="card-grid">
-    <button class="control-card" type="button" id="fanCard">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="1.6"></circle><path d="M12 12c0-4 2-7 5-7 1 2 0 5-5 7Z"></path><path d="M12 12c-4 1-7-1-7-4 2-2 5-1 7 4Z"></path><path d="M12 12c1 4-1 7-4 7-2-1-1-5 4-7Z"></path></svg>
-      <span class="card-name">Ceiling Fan</span>
-      <span class="card-state" id="fanCardState">…</span>
-    </button>
-
-    <button class="control-card" type="button" id="skipCard" data-light="skip" data-name="Skip's Light">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10l-3 6h3l-7 9 1.5-6.5H8L7 4Z"></path></svg>
-      <span class="card-name">Skip's Light</span>
-      <span class="card-state" data-state-for="skip">…</span>
-    </button>
-
-    <button class="control-card" type="button" id="suzanneCard" data-light="suzanne" data-name="Suzanne's Light">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10l-3 6h3l-7 9 1.5-6.5H8L7 4Z"></path></svg>
-      <span class="card-name">Suzanne's Light</span>
-      <span class="card-state" data-state-for="suzanne">…</span>
-    </button>
-  </div>
+  <div class="card-grid" id="cardGrid"></div>
 </div>
 
 <div class="backdrop" id="lightBackdrop">
@@ -305,17 +289,15 @@
   </div>
 </div>
 
-<div class="backdrop" id="fanBackdrop">
+<div class="backdrop" id="speedBackdrop">
   <div class="dialog" role="dialog" aria-modal="true">
-    <h2>Ceiling Fan</h2>
-    <button class="fan-btn" type="button" data-speed="max">Max</button>
-    <button class="fan-btn" type="button" data-speed="med">Med</button>
-    <button class="fan-btn" type="button" data-speed="low">Low</button>
-    <button class="fan-btn" type="button" data-speed="off">Off</button>
+    <h2 id="speedDialogTitle">Fan</h2>
+    <div id="speedButtonList"></div>
   </div>
 </div>
 
 <script src="js/config-store.js"></script>
+<script src="js/icons.js"></script>
 <script src="js/ha-client.js"></script>
 <script src="js/lighting.js"></script>
 </body>

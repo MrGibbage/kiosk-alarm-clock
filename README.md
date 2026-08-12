@@ -38,16 +38,26 @@ Deploy target: `/srv/kiosk-alarm-clock` on docker-server
    analog-dial time picker (tap/drag, Material-clock style), day-of-week
    repeat chips, and a sound picker (choose from uploaded audio/video
    files).
-3. **Lighting & Control** — simple card gallery (Ceiling Fan, Skip's
-   Light, Suzanne's Light), reached via the main screen's Lighting tile.
-   Tapping a card opens a popup scoped to that control:
-   - **Dimmable lights** (Skip's/Suzanne's): vertical slider + ON/OFF
-     shortcut buttons + a **Done** button to close. Needs Done because
-     dragging a slider has no natural "I'm finished" moment the way a
-     discrete button tap does.
-   - **Ceiling Fan**: 4 stacked buttons (Max/Med/Low/Off) — tapping one
+3. **Lighting & Control** — card gallery reached via the main screen's
+   Lighting tile. Card count/order/icon/label/entity are fully
+   configurable (see screen 7, **Customize Lighting Cards**, built
+   2026-08-12) with a choice of grid layout (1×3, 2×2, or 2×3). Tapping a
+   card opens a popup whose shape is auto-detected from what the
+   assigned entity actually supports, not a manual per-card setting:
+   - **Dimmable lights** (any `light.*` with a brightness-capable
+     `supported_color_modes` entry): vertical slider + ON/OFF shortcut
+     buttons + a **Done** button to close. Needs Done because dragging a
+     slider has no natural "I'm finished" moment the way a discrete
+     button tap does.
+   - **Percentage-capable fans** (any `fan.*` reporting
+     `percentage_step`): dynamically generated speed buttons (capped at
+     4 levels + Off; the common 3-speed case keeps the familiar
+     Max/Med/Low/Off naming, others get percentage labels) — tapping one
      both sets the speed and closes the popup immediately, since
      selecting a speed *is* the complete, discrete action.
+   - **Anything else** (a plain switch, a non-dimmable light): no popup
+     at all — tapping the card toggles it directly, same as a
+     main-screen HA tile.
 4. **Ringing** (built 2026-08-10, not in the original mockups — designed
    during scaffolding once the gap was noticed) — full-screen takeover
    shown whenever `input_boolean.kiosk_alarm_ringing` is on: alarm label,
@@ -56,11 +66,11 @@ Deploy target: `/srv/kiosk-alarm-clock` on docker-server
    clears the ringing flag; Dismiss just clears it (and cancels any
    pending snooze timer).
 5. **Settings** (built 2026-08-10, not in the original mockups) — where
-   the HA base URL/token and Lighting & Control's 3 entity IDs are entered
-   and validated live against HA (`GET /api/states/<id>` → shows the
-   resolved friendly name or an error) rather than picked from a live
-   dropdown. Persisted in the browser's `localStorage` — see Architecture.
-   Also links to screen 6.
+   the HA base URL/token are entered and validated live against HA
+   (connection test, not a per-entity check — entity assignment now
+   lives in screens 6 and 7 instead) plus Occupancy Detection (up to 2
+   entities via the same filterable picker). Persisted in the browser's
+   `localStorage` — see Architecture. Also links to screens 6 and 7.
 6. **Customize Buttons** (built 2026-08-12, mocked up the same day) —
    drag-to-reorder the 6 main-screen tiles (grip handle per tile), tap one
    to change its icon (25-icon picker), label, and action. Two action
@@ -72,6 +82,18 @@ Deploy target: `/srv/kiosk-alarm-clock` on docker-server
    Ceiling-Light/Good-Night/Bathroom fields entirely; existing values
    from those fields are carried forward as the first-run seed so
    upgrading doesn't blank out a working setup.
+7. **Customize Lighting Cards** (built 2026-08-12) — same drag-to-reorder
+   + icon/label picker pattern as screen 6, applied to the Lighting &
+   Control screen's cards, plus a layout picker (1×3 / 2×2 / 2×3). Always
+   6 underlying slots regardless of layout — the layout choice only
+   controls how many are shown and in what grid shape, so switching down
+   and back up never discards a hidden slot's configuration. No
+   Alarm-Clock-vs-HA action-type toggle like screen 6 has, since every
+   lighting card is an HA entity — just an icon picker, label, and the
+   same filterable entity search. Superseded Settings' old fixed
+   Ceiling-Fan/Skip's-Light/Suzanne's-Light entity fields entirely,
+   carried forward the same way screen 6 carried forward its predecessor
+   fields.
 
 ## Mockups
 
@@ -318,10 +340,24 @@ the files themselves.
   the configured occupancy entities currently read occupied, so a
   smart-skipped alarm's cause is visible at a glance without checking
   HA directly.
-- **Open, raised 2026-08-12**: customizable Lighting & Control cards.
-  Same pattern as Customize Buttons (custom icon/label, entity picker,
-  reorder), applied to the Ceiling Fan / Skip's Light / Suzanne's Light
-  cards, which still have hardcoded labels/icons today.
+- **Done 2026-08-12**: customizable Lighting & Control cards. Same
+  pattern as Customize Buttons (custom icon/label, filterable HA entity
+  picker, drag reorder) via a new "Customize Lighting Cards →" Settings
+  screen (`customize-lighting.html`), plus a layout picker (1×3, 2×2, or
+  2×3) — always 6 underlying slots (`ConfigStore.loadLightingCards`),
+  with the layout choice (`ConfigStore.loadLightingLayout`) controlling
+  only how many are shown and in what grid shape, so switching layouts
+  down and back up never discards a hidden slot's configuration. Unlike
+  main-screen buttons (single "activate" action), a lighting card's
+  popup shape depends on what its assigned entity can actually do — this
+  is auto-detected from the entity's own reported HA attributes rather
+  than a manual per-card setting: a fan with `percentage_step` gets a
+  dynamically generated speed-button popup (capped at 4 levels + Off,
+  named Max/Med/Low/Off for the common 3-speed case), a light with a
+  brightness-capable `supported_color_modes` entry gets the existing
+  slider popup, and anything else (a plain switch, a non-dimmable light)
+  just toggles directly on tap with no popup, same as a main-screen HA
+  tile.
 - **Done 2026-08-12**: configurable occupancy entities. Settings has a
   new "Occupancy Detection" section — up to 2 entities, reusing the same
   filterable HA entity-search picker as Customize Buttons, OR'd together
@@ -348,9 +384,9 @@ the files themselves.
 
 ## Status
 
-**In daily use as of 2026-08-12.** All 6 screens (`index.html`,
+**In daily use as of 2026-08-12.** All 7 screens (`index.html`,
 `alarms.html`, `lighting.html`, `ringing.html`, `settings.html`,
-`buttons.html`) are wired to live HA state, deployed on docker-server
+`buttons.html`, `customize-lighting.html`) are wired to live HA state, deployed on docker-server
 (`http://192.168.0.231:8850` — see the Holocron page under
 `docker-server/docker-services/kiosk-alarm-clock.md`), and running on the
 actual bedside tablet in Fully Kiosk. Everything below has been tested

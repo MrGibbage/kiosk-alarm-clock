@@ -14,10 +14,7 @@ var ConfigStore = (function () {
   // some (fan/fan-light) were ambiguous duplicates at scaffold time.
   var FIELDS = [
     { key: "haBaseUrl", group: "Connection", label: "Home Assistant URL", placeholder: "http://192.168.0.87:8123", default: "" },
-    { key: "haToken", group: "Connection", label: "Long-lived access token", placeholder: "eyJhbGciOi...", default: "", secret: true },
-    { key: "entityFan", group: "Lighting & Control", label: "Ceiling Fan entity", placeholder: "fan.ceiling_fan", default: "" },
-    { key: "entitySkipLight", group: "Lighting & Control", label: "Skip's Light entity", placeholder: "light.master_bedroom_skip_nightstand", default: "light.master_bedroom_skip_nightstand" },
-    { key: "entitySuzanneLight", group: "Lighting & Control", label: "Suzanne's Light entity", placeholder: "light.master_bedroom_suzanne_nightstand", default: "light.master_bedroom_suzanne_nightstand" }
+    { key: "haToken", group: "Connection", label: "Long-lived access token", placeholder: "eyJhbGciOi...", default: "", secret: true }
   ];
 
   function defaults() {
@@ -202,6 +199,66 @@ var ConfigStore = (function () {
     localStorage.setItem(OCCUPANCY_KEY, JSON.stringify(list));
   }
 
+  // Lighting & Control screen cards — 6 slots always exist underneath
+  // (same fixed ceiling as the main-screen buttons), but how many are
+  // shown/editable is driven by the layout choice below. Each slot is
+  // {id, icon, label, entity}. See the lighting-cards mockup (2026-08-12)
+  // this implements.
+  var LIGHTING_KEY = "kioskAlarmClock.lightingCards.v1";
+
+  // One-time migration seed: carries forward whatever was already set in
+  // the old fixed entityFan/entitySkipLight/entitySuzanneLight fields
+  // (still readable via load() even though FIELDS no longer lists them —
+  // load() merges raw storage over defaults, so legacy keys already in
+  // storage pass through), so upgrading doesn't blank out a working setup.
+  function defaultLightingCards() {
+    var cfg = load();
+    return [
+      { id: 1, icon: "fan", label: "Ceiling Fan", entity: cfg.entityFan || "" },
+      { id: 2, icon: "lamp", label: "Skip's Light", entity: cfg.entitySkipLight || "light.master_bedroom_skip_nightstand" },
+      { id: 3, icon: "lamp", label: "Suzanne's Light", entity: cfg.entitySuzanneLight || "light.master_bedroom_suzanne_nightstand" },
+      { id: 4, icon: "bulb", label: "Light 4", entity: "" },
+      { id: 5, icon: "bulb", label: "Light 5", entity: "" },
+      { id: 6, icon: "bulb", label: "Light 6", entity: "" }
+    ];
+  }
+
+  function loadLightingCards() {
+    var raw = localStorage.getItem(LIGHTING_KEY);
+    if (raw) {
+      try {
+        var parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length === 6) return parsed;
+      } catch (e) { /* corrupt — fall through to reseed */ }
+    }
+    var seeded = defaultLightingCards();
+    saveLightingCards(seeded);
+    return seeded;
+  }
+
+  function saveLightingCards(list) {
+    localStorage.setItem(LIGHTING_KEY, JSON.stringify(list));
+  }
+
+  // Which of the 6 slots are actually shown, and in what grid shape.
+  // Purely presentational — switching layouts never discards a hidden
+  // slot's configuration, it just stops (or starts) displaying it.
+  var LIGHTING_LAYOUTS = {
+    "1x3": { cols: 3, rows: 1, count: 3 },
+    "2x2": { cols: 2, rows: 2, count: 4 },
+    "2x3": { cols: 3, rows: 2, count: 6 }
+  };
+  var LIGHTING_LAYOUT_KEY = "kioskAlarmClock.lightingLayout.v1";
+
+  function loadLightingLayout() {
+    var raw = localStorage.getItem(LIGHTING_LAYOUT_KEY);
+    return (raw && LIGHTING_LAYOUTS[raw]) ? raw : "1x3";
+  }
+
+  function saveLightingLayout(layout) {
+    if (LIGHTING_LAYOUTS[layout]) localStorage.setItem(LIGHTING_LAYOUT_KEY, layout);
+  }
+
   return {
     FIELDS: FIELDS,
     FIXED: FIXED,
@@ -219,6 +276,11 @@ var ConfigStore = (function () {
     loadButtons: loadButtons,
     saveButtons: saveButtons,
     loadOccupancyEntities: loadOccupancyEntities,
-    saveOccupancyEntities: saveOccupancyEntities
+    saveOccupancyEntities: saveOccupancyEntities,
+    loadLightingCards: loadLightingCards,
+    saveLightingCards: saveLightingCards,
+    LIGHTING_LAYOUTS: LIGHTING_LAYOUTS,
+    loadLightingLayout: loadLightingLayout,
+    saveLightingLayout: saveLightingLayout
   };
 })();

@@ -304,6 +304,7 @@
     currently typed even if you haven't validated it yet.</p>
 
   <button class="nav-btn" type="button" id="customizeButtonsBtn">Customize Main Screen Buttons →</button>
+  <button class="nav-btn" type="button" id="customizeLightingBtn">Customize Lighting Cards →</button>
 
   <div class="settings-body" id="fieldContainer">
     <div class="group-title">Occupancy Detection</div>
@@ -622,6 +623,11 @@
     document.getElementById("customizeButtonsBtn").addEventListener("click", function () {
       saveAllFields();
       window.location.href = "buttons.html";
+    });
+
+    document.getElementById("customizeLightingBtn").addEventListener("click", function () {
+      saveAllFields();
+      window.location.href = "customize-lighting.html";
     });
 
     document.getElementById("backBtn").addEventListener("click", function () {

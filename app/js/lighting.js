@@ -6,19 +6,147 @@
     return;
   }
 
-  var cfg = ConfigStore.load();
-  var ENTITIES = { skip: cfg.entitySkipLight, suzanne: cfg.entitySuzanneLight };
-  var FAN_ENTITY = cfg.entityFan;
-  var FAN_PERCENT = { max: 100, med: 67, low: 33, off: 0 };
-  var FAN_LABEL = { max: "Max", med: "Med", low: "Low", off: "Off" };
+  var allSlots = ConfigStore.loadLightingCards();
+  var layout = ConfigStore.loadLightingLayout();
+  var layoutDef = ConfigStore.LIGHTING_LAYOUTS[layout];
 
   document.getElementById("backBtn").addEventListener("click", function () {
     window.location.href = "index.html";
   });
 
-  /* ---------- lights ---------- */
+  function visibleSlots() {
+    return allSlots.slice(0, layoutDef.count);
+  }
 
-  var lightState = { skip: 0, suzanne: 0 };
+  /* ---------- per-entity control-type detection ---------- */
+  /* Unlike main-screen buttons (which just fire one action), a lighting
+     card's popup shape depends on what the assigned entity can actually
+     do — a dimmable light gets a slider, a percentage-capable fan gets
+     speed buttons, anything else (a switch, a plain on/off light) just
+     toggles directly on tap, same as a main-screen HA tile. Detected from
+     the entity's own reported attributes rather than a manual per-card
+     setting, so reassigning a card's entity never needs a second "what
+     kind of control is this" step. */
+
+  function controlTypeForState(entityId, data) {
+    var domain = entityId.split(".")[0];
+    var attrs = (data && data.attributes) || {};
+    if (domain === "fan") {
+      if (typeof attrs.percentage_step === "number" && attrs.percentage_step > 0) {
+        return { type: "fan-speed", step: attrs.percentage_step };
+      }
+      return { type: "toggle" };
+    }
+    if (domain === "light") {
+      var modes = attrs.supported_color_modes;
+      // No supported_color_modes reported (e.g. state temporarily
+      // unavailable) — assume dimmable rather than downgrading a light
+      // that's simply offline right now to a plain toggle.
+      if (!modes || modes.some(function (m) { return m !== "onoff"; })) return { type: "dimmer" };
+      return { type: "toggle" };
+    }
+    return { type: "toggle" };
+  }
+
+  // Caps at 4 discrete levels + Off regardless of the entity's actual
+  // step count — plenty of on-screen choice without an unwieldy button
+  // list for a fine-grained fan. The common 3-speed case keeps its
+  // familiar Max/Med/Low naming; anything else gets percentage labels.
+  function speedButtons(step) {
+    var levels = Math.round(100 / (step || 100));
+    if (!isFinite(levels) || levels < 1) levels = 1;
+    if (levels > 4) levels = 4;
+    var names = levels === 3 ? ["Max", "Med", "Low"] : null;
+    var buttons = [];
+    for (var i = 0; i < levels; i++) {
+      var pct = Math.round(((levels - i) / levels) * 100);
+      buttons.push({ pct: pct, label: names ? names[i] : pct + "%" });
+    }
+    buttons.push({ pct: 0, label: "Off" });
+    return buttons;
+  }
+
+  function pctFromState(entityId, data) {
+    var domain = entityId.split(".")[0];
+    if (domain === "light") {
+      if (data.state !== "on") return 0;
+      var b = data.attributes && data.attributes.brightness;
+      return b ? Math.round((b / 255) * 100) : 100;
+    }
+    if (domain === "fan") {
+      if (data.state !== "on") return 0;
+      return Math.round((data.attributes && data.attributes.percentage) || 0);
+    }
+    return null;
+  }
+
+  /* ---------- card grid ---------- */
+
+  var cardGrid = document.getElementById("cardGrid");
+
+  function cardMarkup(slot) {
+    return (
+      Icons.svg(slot.icon) +
+      '<span class="card-name">' + slot.label + "</span>" +
+      '<span class="card-state" id="state-' + slot.id + '">…</span>'
+    );
+  }
+
+  function renderGrid() {
+    cardGrid.style.setProperty("--cols", layoutDef.cols);
+    cardGrid.style.setProperty("--rows", layoutDef.rows);
+    cardGrid.innerHTML = "";
+    visibleSlots().forEach(function (slot) {
+      var card = document.createElement("button");
+      card.className = "control-card";
+      card.type = "button";
+      card.innerHTML = cardMarkup(slot);
+      card.addEventListener("click", function () { onCardTap(slot); });
+      cardGrid.appendChild(card);
+    });
+  }
+
+  function refreshCard(slot) {
+    var stateEl = document.getElementById("state-" + slot.id);
+    if (!slot.entity) {
+      slot._controlType = "unset";
+      if (stateEl) stateEl.textContent = "Not set";
+      return Promise.resolve();
+    }
+    return HAClient.getState(slot.entity).then(function (res) {
+      if (!res.ok) {
+        slot._controlType = "toggle";
+        if (stateEl) stateEl.textContent = "Unavailable";
+        return;
+      }
+      var info = controlTypeForState(slot.entity, res.data);
+      slot._controlType = info.type;
+      slot._step = info.step;
+      var pct = pctFromState(slot.entity, res.data);
+      slot._pct = pct || 0;
+      var label;
+      if (pct !== null) label = pct > 0 ? pct + "%" : "Off";
+      else label = res.data.state === "on" ? "On" : "Off";
+      if (stateEl) stateEl.textContent = label;
+    });
+  }
+
+  function refreshAllCards() {
+    visibleSlots().forEach(refreshCard);
+  }
+
+  function onCardTap(slot) {
+    if (!slot.entity) { window.location.href = "customize-lighting.html"; return; }
+    if (slot._controlType === "dimmer") openDimmer(slot);
+    else if (slot._controlType === "fan-speed") openSpeed(slot);
+    else toggleDirect(slot);
+  }
+
+  function toggleDirect(slot) {
+    HAClient.activateEntity(slot.entity, "toggle").then(function () { refreshCard(slot); });
+  }
+
+  /* ---------- dimmer popup (generalized off any slot, not fixed IDs) ---------- */
 
   var lightBackdrop = document.getElementById("lightBackdrop");
   var lightDialogTitle = document.getElementById("lightDialogTitle");
@@ -26,11 +154,7 @@
   var brightnessFill = document.getElementById("brightnessFill");
   var brightnessThumb = document.getElementById("brightnessThumb");
   var brightnessValue = document.getElementById("brightnessValue");
-  var currentLightId = null;
-
-  function cardStateText(pct) {
-    return pct > 0 ? pct + "%" : "Off";
-  }
+  var currentSlot = null;
 
   function renderBrightness(pct) {
     brightnessFill.style.height = pct + "%";
@@ -38,13 +162,11 @@
     brightnessValue.textContent = pct + "%";
   }
 
-  function sendBrightness(id, pct) {
-    var entityId = ENTITIES[id];
-    if (!entityId) return;
+  function sendBrightness(slot, pct) {
     if (pct <= 0) {
-      HAClient.callService("light", "turn_off", { entity_id: entityId });
+      HAClient.callService("light", "turn_off", { entity_id: slot.entity });
     } else {
-      HAClient.callService("light", "turn_on", { entity_id: entityId, brightness_pct: pct });
+      HAClient.callService("light", "turn_on", { entity_id: slot.entity, brightness_pct: pct });
     }
   }
 
@@ -53,7 +175,7 @@
     var y = evt.clientY - rect.top;
     var pct = Math.round(100 - (y / rect.height) * 100);
     pct = Math.max(0, Math.min(100, pct));
-    lightState[currentLightId] = pct;
+    currentSlot._pct = pct;
     renderBrightness(pct);
   }
 
@@ -67,112 +189,70 @@
     if (draggingSlider) setBrightnessFromEvent(evt);
   });
   brightnessTrack.addEventListener("pointerup", function () {
-    if (draggingSlider) sendBrightness(currentLightId, lightState[currentLightId]);
+    if (draggingSlider) sendBrightness(currentSlot, currentSlot._pct);
     draggingSlider = false;
   });
 
   document.getElementById("lightOnBtn").addEventListener("click", function () {
-    lightState[currentLightId] = lightState[currentLightId] > 0 ? lightState[currentLightId] : 100;
-    renderBrightness(lightState[currentLightId]);
-    sendBrightness(currentLightId, lightState[currentLightId]);
+    currentSlot._pct = currentSlot._pct > 0 ? currentSlot._pct : 100;
+    renderBrightness(currentSlot._pct);
+    sendBrightness(currentSlot, currentSlot._pct);
   });
   document.getElementById("lightOffBtn").addEventListener("click", function () {
-    lightState[currentLightId] = 0;
+    currentSlot._pct = 0;
     renderBrightness(0);
-    sendBrightness(currentLightId, 0);
+    sendBrightness(currentSlot, 0);
   });
 
-  function openLight(id, name) {
-    if (!ENTITIES[id]) { window.location.href = "settings.html"; return; }
-    currentLightId = id;
-    lightDialogTitle.textContent = name;
-    renderBrightness(lightState[id]);
+  function openDimmer(slot) {
+    currentSlot = slot;
+    lightDialogTitle.textContent = slot.label;
+    renderBrightness(slot._pct || 0);
     lightBackdrop.classList.add("is-open");
   }
 
-  function closeLight() {
+  function closeDimmer() {
     lightBackdrop.classList.remove("is-open");
-    var el = document.querySelector('[data-state-for="' + currentLightId + '"]');
-    if (el) el.textContent = cardStateText(lightState[currentLightId]);
+    if (currentSlot) refreshCard(currentSlot);
   }
 
-  Array.prototype.slice.call(document.querySelectorAll("[data-light]")).forEach(function (card) {
-    card.addEventListener("click", function () {
-      openLight(card.dataset.light, card.dataset.name);
-    });
-  });
-
-  document.getElementById("lightDoneBtn").addEventListener("click", closeLight);
+  document.getElementById("lightDoneBtn").addEventListener("click", closeDimmer);
   lightBackdrop.addEventListener("click", function (evt) {
-    if (evt.target === lightBackdrop) closeLight();
+    if (evt.target === lightBackdrop) closeDimmer();
   });
 
-  /* ---------- fan ---------- */
+  /* ---------- fan-speed popup (button list generated per entity) ---------- */
 
-  var fanState = "off";
-  var fanBackdrop = document.getElementById("fanBackdrop");
-  var fanCard = document.getElementById("fanCard");
-  var fanCardState = document.getElementById("fanCardState");
+  var speedBackdrop = document.getElementById("speedBackdrop");
+  var speedDialogTitle = document.getElementById("speedDialogTitle");
+  var speedButtonList = document.getElementById("speedButtonList");
 
-  fanCard.addEventListener("click", function () {
-    if (!FAN_ENTITY) { window.location.href = "settings.html"; return; }
-    Array.prototype.slice.call(document.querySelectorAll(".fan-btn")).forEach(function (b) {
-      b.classList.toggle("is-selected", b.dataset.speed === fanState);
+  function openSpeed(slot) {
+    currentSlot = slot;
+    speedDialogTitle.textContent = slot.label;
+    speedButtonList.innerHTML = "";
+    speedButtons(slot._step).forEach(function (b) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "fan-btn" + (Math.round(slot._pct || 0) === b.pct ? " is-selected" : "");
+      btn.textContent = b.label;
+      btn.addEventListener("click", function () {
+        speedBackdrop.classList.remove("is-open");
+        if (b.pct <= 0) {
+          HAClient.callService("fan", "turn_off", { entity_id: slot.entity }).then(function () { refreshCard(slot); });
+        } else {
+          HAClient.callService("fan", "set_percentage", { entity_id: slot.entity, percentage: b.pct }).then(function () { refreshCard(slot); });
+        }
+      });
+      speedButtonList.appendChild(btn);
     });
-    fanBackdrop.classList.add("is-open");
-  });
-
-  Array.prototype.slice.call(document.querySelectorAll(".fan-btn")).forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      fanState = btn.dataset.speed;
-      fanCardState.textContent = FAN_LABEL[fanState];
-      fanBackdrop.classList.remove("is-open");
-      if (fanState === "off") {
-        HAClient.callService("fan", "turn_off", { entity_id: FAN_ENTITY });
-      } else {
-        HAClient.callService("fan", "set_percentage", { entity_id: FAN_ENTITY, percentage: FAN_PERCENT[fanState] });
-      }
-    });
-  });
-
-  fanBackdrop.addEventListener("click", function (evt) {
-    if (evt.target === fanBackdrop) fanBackdrop.classList.remove("is-open");
-  });
-
-  /* ---------- initial state fetch ---------- */
-
-  function brightnessPctFromState(data) {
-    if (!data || data.state !== "on") return 0;
-    var b = data.attributes && data.attributes.brightness;
-    return b ? Math.round((b / 255) * 100) : 100;
+    speedBackdrop.classList.add("is-open");
   }
 
-  function fanSpeedFromState(data) {
-    if (!data || data.state !== "on") return "off";
-    var pct = (data.attributes && data.attributes.percentage) || 0;
-    if (pct >= 84) return "max";
-    if (pct >= 50) return "med";
-    if (pct > 0) return "low";
-    return "off";
-  }
-
-  Object.keys(ENTITIES).forEach(function (id) {
-    var entityId = ENTITIES[id];
-    var stateEl = document.querySelector('[data-state-for="' + id + '"]');
-    if (!entityId) { if (stateEl) stateEl.textContent = "Not set"; return; }
-    HAClient.getState(entityId).then(function (res) {
-      var pct = res.ok ? brightnessPctFromState(res.data) : 0;
-      lightState[id] = pct;
-      if (stateEl) stateEl.textContent = res.ok ? cardStateText(pct) : "Unavailable";
-    });
+  speedBackdrop.addEventListener("click", function (evt) {
+    if (evt.target === speedBackdrop) speedBackdrop.classList.remove("is-open");
   });
 
-  if (!FAN_ENTITY) {
-    fanCardState.textContent = "Not set";
-  } else {
-    HAClient.getState(FAN_ENTITY).then(function (res) {
-      fanState = res.ok ? fanSpeedFromState(res.data) : "off";
-      fanCardState.textContent = res.ok ? FAN_LABEL[fanState] : "Unavailable";
-    });
-  }
+  renderGrid();
+  refreshAllCards();
 })();
