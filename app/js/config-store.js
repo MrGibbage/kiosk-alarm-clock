@@ -75,7 +75,8 @@ var ConfigStore = (function () {
     skipUntil: "input_datetime.kiosk_alarm_skip_until",
     ringing: "input_boolean.kiosk_alarm_ringing",
     ringingSource: "input_text.kiosk_alarm_ringing_source",
-    snoozeTimer: "timer.kiosk_alarm_snooze"
+    snoozeTimer: "timer.kiosk_alarm_snooze",
+    occupancyEntities: "input_text.kiosk_alarm_occupancy_entities"
   };
 
   // Per-alarm sound selection — see README's "local config file" decision.
@@ -166,6 +167,41 @@ var ConfigStore = (function () {
     localStorage.setItem(BUTTON_CONFIG_KEY, JSON.stringify(list));
   }
 
+  // Occupancy detection — up to 2 entities, OR'd ("occupied if either is
+  // on"). Each slot is either null (unset) or {id, name}. The automation
+  // that actually makes the skip decision can't read the browser's
+  // localStorage, so every change here also gets pushed to
+  // FIXED.occupancyEntities (a comma-separated input_text) — see
+  // settings.html's picker for where that push happens.
+  var OCCUPANCY_KEY = "kioskAlarmClock.occupancyEntities.v1";
+
+  // Seeded from the one entity that was hardcoded in the automation
+  // before this was configurable, so upgrading doesn't silently disable
+  // the occupancy check that was already working.
+  function defaultOccupancyEntities() {
+    return [
+      { id: "binary_sensor.bedroom_occupancy", name: "Master Bedroom Occupancy" },
+      null
+    ];
+  }
+
+  function loadOccupancyEntities() {
+    var raw = localStorage.getItem(OCCUPANCY_KEY);
+    if (raw) {
+      try {
+        var parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length === 2) return parsed;
+      } catch (e) { /* corrupt — fall through to reseed */ }
+    }
+    var seeded = defaultOccupancyEntities();
+    saveOccupancyEntities(seeded);
+    return seeded;
+  }
+
+  function saveOccupancyEntities(list) {
+    localStorage.setItem(OCCUPANCY_KEY, JSON.stringify(list));
+  }
+
   return {
     FIELDS: FIELDS,
     FIXED: FIXED,
@@ -181,6 +217,8 @@ var ConfigStore = (function () {
     addManagedAlarm: addManagedAlarm,
     removeManagedAlarm: removeManagedAlarm,
     loadButtons: loadButtons,
-    saveButtons: saveButtons
+    saveButtons: saveButtons,
+    loadOccupancyEntities: loadOccupancyEntities,
+    saveOccupancyEntities: saveOccupancyEntities
   };
 })();

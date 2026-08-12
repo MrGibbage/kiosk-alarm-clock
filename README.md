@@ -315,22 +315,26 @@ the files themselves.
   backlog items; built as one screen per the mockup review.
 - **Done 2026-08-12**: occupancy status indicator on the main screen (the
   small pill next to the alarm/skip pills) — shows whether
-  `binary_sensor.bedroom_occupancy` currently reads occupied, so a
+  the configured occupancy entities currently read occupied, so a
   smart-skipped alarm's cause is visible at a glance without checking
-  HA directly. Currently **hardcoded** to that one entity, same as the
-  automation — see the next item.
+  HA directly.
 - **Open, raised 2026-08-12**: customizable Lighting & Control cards.
   Same pattern as Customize Buttons (custom icon/label, entity picker,
   reorder), applied to the Ceiling Fan / Skip's Light / Suzanne's Light
   cards, which still have hardcoded labels/icons today.
-- **Open, raised 2026-08-12**: configurable occupancy entity/entities.
-  Right now "which sensor means the room is occupied" is hardcoded in
-  two places that have to be kept in sync by hand — the HA automation
-  (`kiosk_alarm.yaml`) and the new status pill's `OCCUPANCY_ENTITY`
-  constant in `main.js`. Needs a Settings field (or fields, if Skip
-  wants multiple sensors OR'd together) that both read from, likely
-  requiring the automation to read a `input_text`/similar HA helper the
-  app writes to rather than a value baked into the automation's YAML.
+- **Done 2026-08-12**: configurable occupancy entities. Settings has a
+  new "Occupancy Detection" section — up to 2 entities, reusing the same
+  filterable HA entity-search picker as Customize Buttons, OR'd together
+  (occupied if either reads "on"). The picker's choice is stored client-
+  side (`ConfigStore.loadOccupancyEntities`) and pushed as a comma-
+  separated list into a new `input_text.kiosk_alarm_occupancy_entities`
+  helper on every change, since `kiosk_alarm.yaml`'s automation can't
+  read the browser's localStorage directly — it now reads that helper
+  and ORs across whichever entities are listed (0, 1, or 2), failing
+  open (rings) if the list is empty. Deliberately capped at 2 rather
+  than an arbitrary-length list or a raw Jinja-template field — enough
+  flexibility for realistic cases ("motion sensor OR bathroom light")
+  without a full expression-builder UI Skip explicitly didn't want.
 - **Open, raised 2026-08-12**: per-alarm occupancy override. Today the
   fail-open occupancy check applies globally to every alarm via the one
   shared automation. Skip wants some alarms to ignore the occupancy

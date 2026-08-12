@@ -166,6 +166,125 @@
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
+
+  /* ---------- occupancy entity slots + picker ---------- */
+
+  .occ-slot {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .occ-slot-name {
+    flex: 1;
+    min-width: 0;
+    padding: 0.65rem 0.8rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--panel-3);
+    background: var(--panel-2);
+    color: var(--ink);
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .occ-slot-name.is-empty { color: var(--muted); }
+
+  .occ-clear {
+    width: 2.4rem;
+    height: 2.4rem;
+    font-size: 1.1rem;
+    line-height: 1;
+  }
+
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    background: color-mix(in srgb, var(--hinge) 55%, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease;
+    z-index: 10;
+  }
+
+  .backdrop.is-open { opacity: 1; pointer-events: auto; }
+
+  .dialog {
+    width: min(26rem, 92vw);
+    max-height: 80vh;
+    overflow-y: auto;
+    background: var(--panel);
+    border-radius: 1rem;
+    padding: clamp(1.1rem, 2vw, 1.6rem);
+    box-shadow: 0 20px 50px var(--shadow);
+    transform: scale(0.94) translateY(10px);
+    opacity: 0;
+    transition: transform 160ms ease, opacity 160ms ease;
+  }
+
+  .backdrop.is-open .dialog { transform: scale(1) translateY(0); opacity: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .backdrop, .dialog { transition: none; }
+  }
+
+  .dialog h2 {
+    margin: 0 0 clamp(1rem, 2.4vw, 1.5rem);
+    font-family: Georgia, "Noto Serif", "Times New Roman", serif;
+    font-size: clamp(1.2rem, 2.2vw, 1.4rem);
+    font-weight: 400;
+    text-align: center;
+  }
+
+  .option-list {
+    max-height: 16rem;
+    overflow-y: auto;
+    border-radius: 0.5rem;
+    background: var(--panel-2);
+  }
+
+  .option-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    padding: 0.6rem 0.8rem;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .option-row:hover { background: var(--panel-3); }
+  .option-row svg { width: 1rem; height: 1rem; flex: none; color: var(--muted); }
+
+  .option-text { flex: 1; min-width: 0; }
+  .option-name { font-size: 0.88rem; display: block; }
+  .option-sub {
+    font-size: 0.72rem;
+    color: var(--muted);
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .option-empty { padding: 0.8rem; font-size: 0.82rem; color: var(--muted); text-align: center; }
+
+  .sheet-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    margin-top: clamp(1rem, 2.4vw, 1.5rem);
+  }
+
+  .option-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 </style>
 </head>
 <body>
@@ -186,7 +305,21 @@
 
   <button class="nav-btn" type="button" id="customizeButtonsBtn">Customize Main Screen Buttons →</button>
 
-  <div class="settings-body" id="fieldContainer"></div>
+  <div class="settings-body" id="fieldContainer">
+    <div class="group-title">Occupancy Detection</div>
+    <p class="settings-hint" style="margin-top: -0.4rem;">Optional — up to 2 entities. An alarm is skipped as "already up" if <strong>either</strong> reads "on". Leave both unset to always ring.</p>
+
+    <div class="occ-slot" data-slot="0">
+      <span class="occ-slot-name" id="occSlot0Name">Not set</span>
+      <button class="validate-btn" type="button" id="occSlot0Choose">Choose…</button>
+      <button class="icon-btn occ-clear" type="button" id="occSlot0Clear" aria-label="Clear sensor 1" hidden>&times;</button>
+    </div>
+    <div class="occ-slot" data-slot="1">
+      <span class="occ-slot-name" id="occSlot1Name">Not set</span>
+      <button class="validate-btn" type="button" id="occSlot1Choose">Choose…</button>
+      <button class="icon-btn occ-clear" type="button" id="occSlot1Clear" aria-label="Clear sensor 2" hidden>&times;</button>
+    </div>
+  </div>
 
   <div class="save-row">
     <button class="btn btn--ghost" type="button" id="validateAllBtn">Validate all</button>
@@ -194,7 +327,19 @@
   </div>
 </div>
 
+<div class="backdrop" id="occPickerBackdrop">
+  <div class="dialog" role="dialog" aria-modal="true" aria-label="Choose occupancy entity">
+    <h2>Choose Entity</h2>
+    <input class="label-input" id="occSearch" type="text" placeholder="Search lights, sensors, switches…" style="margin-bottom: 0.75rem;" />
+    <div class="option-list" id="occResultList"></div>
+    <div class="sheet-actions">
+      <button class="btn btn--ghost" type="button" id="occPickerCancelBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/config-store.js"></script>
+<script src="js/icons.js"></script>
 <script src="js/ha-client.js"></script>
 <script>
   (function () {
@@ -204,6 +349,116 @@
     var cfg = ConfigStore.load();
     var inputs = {};
     var lastGroup = null;
+
+    /* ---------- occupancy entities (up to 2, OR'd) ---------- */
+
+    var occSlots = ConfigStore.loadOccupancyEntities();
+    var occAllEntities = []; // populated once from HA for the search picker
+    var occLoadError = null;
+    var occEditingSlot = null;
+
+    var occBackdrop = document.getElementById("occPickerBackdrop");
+    var occSearch = document.getElementById("occSearch");
+    var occResultList = document.getElementById("occResultList");
+
+    function renderOccSlot(i) {
+      var nameEl = document.getElementById("occSlot" + i + "Name");
+      var clearBtn = document.getElementById("occSlot" + i + "Clear");
+      var slot = occSlots[i];
+      if (slot) {
+        nameEl.textContent = slot.name;
+        nameEl.classList.remove("is-empty");
+        clearBtn.hidden = false;
+      } else {
+        nameEl.textContent = "Not set";
+        nameEl.classList.add("is-empty");
+        clearBtn.hidden = true;
+      }
+    }
+
+    function persistOccSlots() {
+      ConfigStore.saveOccupancyEntities(occSlots);
+      // The automation can't read localStorage, so every change also gets
+      // pushed to the HA helper it actually reads (comma-separated list,
+      // empty slots omitted).
+      var ids = occSlots.filter(Boolean).map(function (s) { return s.id; }).join(",");
+      HAClient.callService("input_text", "set_value", {
+        entity_id: ConfigStore.FIXED.occupancyEntities,
+        value: ids
+      });
+    }
+
+    function renderOccResultList() {
+      occResultList.innerHTML = "";
+      if (occLoadError) {
+        occResultList.innerHTML = '<p class="option-empty">Couldn’t load entities: ' + occLoadError + "</p>";
+        return;
+      }
+      var q = occSearch.value.trim().toLowerCase();
+      var matches = occAllEntities.filter(function (a) {
+        return !q || a.name.toLowerCase().indexOf(q) !== -1 || a.sub.toLowerCase().indexOf(q) !== -1;
+      });
+      if (!matches.length) {
+        occResultList.innerHTML = '<p class="option-empty">' + (occAllEntities.length ? "No matches" : "Loading…") + "</p>";
+        return;
+      }
+      matches.slice(0, 80).forEach(function (a) {
+        var row = document.createElement("button");
+        row.type = "button";
+        row.className = "option-row";
+        row.innerHTML =
+          Icons.svg(a.icon) +
+          '<span class="option-text"><span class="option-name">' + a.name + '</span><span class="option-sub">' + a.sub + "</span></span>";
+        row.addEventListener("click", function () {
+          occSlots[occEditingSlot] = { id: a.id, name: a.name };
+          renderOccSlot(occEditingSlot);
+          persistOccSlots();
+          closeOccPicker();
+        });
+        occResultList.appendChild(row);
+      });
+    }
+
+    function openOccPicker(slotIndex) {
+      occEditingSlot = slotIndex;
+      occSearch.value = "";
+      renderOccResultList();
+      occBackdrop.classList.add("is-open");
+    }
+
+    function closeOccPicker() {
+      occBackdrop.classList.remove("is-open");
+      occEditingSlot = null;
+    }
+
+    occSearch.addEventListener("input", renderOccResultList);
+    document.getElementById("occPickerCancelBtn").addEventListener("click", closeOccPicker);
+    occBackdrop.addEventListener("click", function (evt) { if (evt.target === occBackdrop) closeOccPicker(); });
+
+    [0, 1].forEach(function (i) {
+      renderOccSlot(i);
+      document.getElementById("occSlot" + i + "Choose").addEventListener("click", function () { openOccPicker(i); });
+      document.getElementById("occSlot" + i + "Clear").addEventListener("click", function () {
+        occSlots[i] = null;
+        renderOccSlot(i);
+        persistOccSlots();
+      });
+    });
+
+    HAClient.getStates().then(function (res) {
+      if (!res.ok || !Array.isArray(res.data)) {
+        occLoadError = res.error || ("HTTP " + res.status);
+        if (occEditingSlot !== null) renderOccResultList();
+        return;
+      }
+      occAllEntities = res.data
+        .filter(function (e) { return e.attributes && e.attributes.friendly_name; })
+        .map(function (e) {
+          return { id: e.entity_id, name: e.attributes.friendly_name, sub: e.entity_id, icon: Icons.iconForEntity(e.entity_id) };
+        })
+        .sort(function (a, b) { return a.name.localeCompare(b.name); });
+      if (occEditingSlot !== null) renderOccResultList();
+    });
 
     ConfigStore.FIELDS.forEach(function (f) {
       if (f.group !== lastGroup) {
