@@ -167,6 +167,8 @@
     automatically as soon as they validate, and Back saves whatever's
     currently typed even if you haven't validated it yet.</p>
 
+  <button class="btn btn--ghost" type="button" id="customizeButtonsBtn" style="max-width: 40rem; width: 100%; margin: 0 auto 1rem; display: block;">Customize Main Screen Buttons →</button>
+
   <div class="settings-body" id="fieldContainer"></div>
 
   <div class="save-row">
@@ -343,6 +345,11 @@
     document.getElementById("saveBtn").addEventListener("click", function () {
       saveAllFields();
       window.location.href = "index.html";
+    });
+
+    document.getElementById("customizeButtonsBtn").addEventListener("click", function () {
+      saveAllFields();
+      window.location.href = "buttons.html";
     });
 
     document.getElementById("backBtn").addEventListener("click", function () {

@@ -15,9 +15,6 @@ var ConfigStore = (function () {
   var FIELDS = [
     { key: "haBaseUrl", group: "Connection", label: "Home Assistant URL", placeholder: "http://192.168.0.87:8123", default: "" },
     { key: "haToken", group: "Connection", label: "Long-lived access token", placeholder: "eyJhbGciOi...", default: "", secret: true },
-    { key: "entityCeilingLight", group: "Main screen tiles", label: "Ceiling Light entity", placeholder: "light.master_bedroom_fan_light", default: "" },
-    { key: "entityGoodNight", group: "Main screen tiles", label: "Good Night entity", placeholder: "script.bedtime", default: "script.bedtime" },
-    { key: "entityBathroom", group: "Main screen tiles", label: "Bathroom entity", placeholder: "light.master_bath_vanity", default: "light.master_bath_vanity" },
     { key: "entityFan", group: "Lighting & Control", label: "Ceiling Fan entity", placeholder: "fan.ceiling_fan", default: "" },
     { key: "entitySkipLight", group: "Lighting & Control", label: "Skip's Light entity", placeholder: "light.master_bedroom_skip_nightstand", default: "light.master_bedroom_skip_nightstand" },
     { key: "entitySuzanneLight", group: "Lighting & Control", label: "Suzanne's Light entity", placeholder: "light.master_bedroom_suzanne_nightstand", default: "light.master_bedroom_suzanne_nightstand" }
@@ -128,6 +125,47 @@ var ConfigStore = (function () {
     localStorage.setItem(MANAGED_ALARMS_KEY, JSON.stringify(list));
   }
 
+  // Main-screen button bar — order + icon + label + action per slot. See
+  // the button-config-screen mockup (2026-08-12) this implements. Fixed
+  // at 6 slots (README's confirmed ceiling for a 10" screen) — reordering
+  // and reconfiguring existing slots, not adding/removing them.
+  var BUTTON_CONFIG_KEY = "kioskAlarmClock.buttonConfig.v1";
+
+  // One-time migration seed: carries forward whatever was already set in
+  // the old fixed entityCeilingLight/entityGoodNight/entityBathroom
+  // fields (still readable via load() even though FIELDS no longer lists
+  // them — load() merges raw storage over defaults, so legacy keys still
+  // already in storage pass through), so upgrading doesn't blank out a
+  // working setup.
+  function defaultButtons() {
+    var cfg = load();
+    return [
+      { id: 1, icon: "lighting", label: "Lighting", type: "app", action: "open_lighting" },
+      { id: 2, icon: "bulb", label: "Ceiling Light", type: "ha", action: cfg.entityCeilingLight || "" },
+      { id: 3, icon: "moon", label: "Good Night", type: "ha", action: cfg.entityGoodNight || "script.bedtime" },
+      { id: 4, icon: "bathroom", label: "Bathroom", type: "ha", action: cfg.entityBathroom || "light.master_bath_vanity" },
+      { id: 5, icon: "skip", label: "Skip Tonight", type: "app", action: "skip_tonight" },
+      { id: 6, icon: "alarm", label: "Snooze", type: "app", action: "snooze" }
+    ];
+  }
+
+  function loadButtons() {
+    var raw = localStorage.getItem(BUTTON_CONFIG_KEY);
+    if (raw) {
+      try {
+        var parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) return parsed;
+      } catch (e) { /* corrupt — fall through to reseed */ }
+    }
+    var seeded = defaultButtons();
+    saveButtons(seeded);
+    return seeded;
+  }
+
+  function saveButtons(list) {
+    localStorage.setItem(BUTTON_CONFIG_KEY, JSON.stringify(list));
+  }
+
   return {
     FIELDS: FIELDS,
     FIXED: FIXED,
@@ -141,6 +179,8 @@ var ConfigStore = (function () {
     removeAlarmSound: removeAlarmSound,
     listManagedAlarms: listManagedAlarms,
     addManagedAlarm: addManagedAlarm,
-    removeManagedAlarm: removeManagedAlarm
+    removeManagedAlarm: removeManagedAlarm,
+    loadButtons: loadButtons,
+    saveButtons: saveButtons
   };
 })();

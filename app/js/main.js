@@ -223,26 +223,11 @@
   setInterval(pollRinging, 5000);
 
   /* ---------- tiles ---------- */
+  /* Rendered from ConfigStore.loadButtons() (order/icon/label/action per
+     slot, editable via buttons.html) rather than fixed markup — see the
+     button-config-screen mockup (2026-08-12) this implements. */
 
-  var cfg = ConfigStore.load();
-
-  document.getElementById("tileLighting").addEventListener("click", function () {
-    window.location.href = "lighting.html";
-  });
-
-  document.getElementById("tileCeilingLight").addEventListener("click", function () {
-    if (cfg.entityCeilingLight) HAClient.activateEntity(cfg.entityCeilingLight);
-  });
-
-  document.getElementById("tileGoodNight").addEventListener("click", function () {
-    if (cfg.entityGoodNight) HAClient.activateEntity(cfg.entityGoodNight);
-  });
-
-  document.getElementById("tileBathroom").addEventListener("click", function () {
-    if (cfg.entityBathroom) HAClient.activateEntity(cfg.entityBathroom);
-  });
-
-  document.getElementById("tileSkipTonight").addEventListener("click", function () {
+  function skipTonight() {
     var tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     var iso = tomorrow.toISOString().slice(0, 10);
@@ -250,9 +235,9 @@
       entity_id: FIXED.skipUntil,
       date: iso
     }).then(refreshPills);
-  });
+  }
 
-  document.getElementById("tileSnooze").addEventListener("click", function () {
+  function snooze() {
     // Only meaningful if something is actually ringing right now — a stray
     // tap otherwise would arm a snooze timer that later re-triggers ringing
     // for no reason.
@@ -262,5 +247,25 @@
         HAClient.callService("input_boolean", "turn_off", { entity_id: FIXED.ringing });
       }
     });
+  }
+
+  function activateButton(btn) {
+    if (btn.type === "app") {
+      if (btn.action === "open_lighting") window.location.href = "lighting.html";
+      else if (btn.action === "open_alarms") window.location.href = "alarms.html";
+      else if (btn.action === "skip_tonight") skipTonight();
+      else if (btn.action === "snooze") snooze();
+    } else if (btn.type === "ha") {
+      if (btn.action) HAClient.activateEntity(btn.action);
+    }
+  }
+
+  ConfigStore.loadButtons().forEach(function (btn) {
+    var tile = document.createElement("button");
+    tile.className = "tile";
+    tile.type = "button";
+    tile.innerHTML = Icons.svg(btn.icon) + "<span>" + btn.label + "</span>";
+    tile.addEventListener("click", function () { activateButton(btn); });
+    buttonsNav.appendChild(tile);
   });
 })();

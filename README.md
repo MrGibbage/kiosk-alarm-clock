@@ -27,9 +27,10 @@ Deploy target: `/srv/kiosk-alarm-clock` on docker-server
 ## Screens
 
 1. **Main clock** — huge live clock, day/night toggle, HA connection
-   status icon, alarm/vacation status, 6 permanent action tiles:
-   **Lighting** (opens screen 3), **Ceiling Light, Good Night, Bathroom,
-   Skip Tonight, Snooze**.
+   status icon, alarm/vacation status, 6 permanent action tiles. Tile
+   order/icon/label/action are now fully configurable (see screen 6,
+   **Customize Buttons**, built 2026-08-12) — the tile *count* stays
+   fixed at 6 (confirmed ceiling for a 10" screen), not the content.
 2. **Alarms** — list of independent alarms, each editable via an
    analog-dial time picker (tap/drag, Material-clock style), day-of-week
    repeat chips, and a sound picker (choose from uploaded audio/video
@@ -52,11 +53,22 @@ Deploy target: `/srv/kiosk-alarm-clock` on docker-server
    clears the ringing flag; Dismiss just clears it (and cancels any
    pending snooze timer).
 5. **Settings** (built 2026-08-10, not in the original mockups) — where
-   the HA base URL/token and every entity ID the app touches (3 main-tile
-   entities, 3 Lighting & Control entities) are entered and validated live
-   against HA (`GET /api/states/<id>` → shows the resolved friendly name
-   or an error) rather than picked from a live dropdown. Persisted in the
-   browser's `localStorage` — see Architecture.
+   the HA base URL/token and Lighting & Control's 3 entity IDs are entered
+   and validated live against HA (`GET /api/states/<id>` → shows the
+   resolved friendly name or an error) rather than picked from a live
+   dropdown. Persisted in the browser's `localStorage` — see Architecture.
+   Also links to screen 6.
+6. **Customize Buttons** (built 2026-08-12, mocked up the same day) —
+   drag-to-reorder the 6 main-screen tiles (grip handle per tile), tap one
+   to change its icon (25-icon picker), label, and action. Two action
+   types: **Alarm Clock** (navigate to Lighting/Alarms, Skip Tonight,
+   Snooze — the same fixed list as before, now reassignable to any slot)
+   or **Home Assistant** (a live, filterable search over every HA entity
+   — same idea as the Android HA widget's picker — instead of typing a
+   raw entity_id in Settings). Superseded Settings' old fixed
+   Ceiling-Light/Good-Night/Bathroom fields entirely; existing values
+   from those fields are carried forward as the first-run seed so
+   upgrading doesn't blank out a working setup.
 
 ## Mockups
 
@@ -69,6 +81,9 @@ Claude artifact hosting:
   day chips, sound picker)
 - `mockups/lighting-screen.html` — the Lighting & Control card gallery
   + dimmer/fan popups
+- `mockups/button-config-screen.html` — the Customize Buttons drag/icon/
+  action-picker screen (published as an Artifact for review before
+  building; mock HA entity list, real data model once implemented)
 
 All three share one CSS custom-property token system (split-flap/warm-amber
 palette, serif numerals) so new screens should reuse the same tokens
@@ -291,44 +306,40 @@ the files themselves.
 
 ## Backlog / planned improvements
 
-- **Configurable buttons, not fixed labels/icons.** Raised 2026-08-11:
-  Lighting & Control's cards and the main screen's tiles currently have
-  hardcoded labels/icons per slot (Settings only lets you point each slot
-  at a different entity, not rename it or change its icon).
-- **Entity picker instead of typed IDs.** Settings currently requires
-  typing a raw entity_id and validating it. Skip wants a filterable
-  dropdown over the *entire* list of HA actions/entities — the same UX
-  as Android's Home Assistant home-screen widget picker — instead of
-  needing to already know the exact entity_id.
-- **A reusable per-button settings screen.** Longer-term direction for
-  the two items above: one shared "configure this button" screen (icon
-  picker + label + entity/action picker) that every tile/card opens into
-  for its own slot, rather than one flat list of fields in Settings.
+- **Done 2026-08-12**: configurable main-screen buttons (custom
+  icon/label, filterable HA entity picker, drag reorder) — see Screens
+  #6, Customize Buttons. Originally raised 2026-08-11 as three separate
+  backlog items; built as one screen per the mockup review.
+- **Still open**: Lighting & Control's 3 cards (Ceiling Fan, Skip's
+  Light, Suzanne's Light) still have hardcoded labels/icons — Customize
+  Buttons only covers the main screen's 6-tile bar, not this screen.
+  Same underlying pattern would apply if/when this is wanted.
 
 ## Status
 
-**Real app built and deployed 2026-08-10.** All 5 screens
-(`app/index.html`, `alarms.html`, `lighting.html`, `ringing.html`,
-`settings.html`) are wired to live HA state — not mockups anymore. The
-`kiosk-alarm-clock` container is running on docker-server
-(`http://192.168.0.231:8850`, see the Holocron page under
-`docker-server/docker-services/kiosk-alarm-clock.md` for deploy/hardening
-detail). The `homeassistant` host has the supporting
-`input_boolean`/`input_datetime`/`input_text`/`timer` helpers and the
-`kiosk_alarm.yaml` automation live (added via YAML + domain `.reload`,
-verified with `ha_get_states`/`ha_list_automations`).
+**In daily use as of 2026-08-12.** All 6 screens (`index.html`,
+`alarms.html`, `lighting.html`, `ringing.html`, `settings.html`,
+`buttons.html`) are wired to live HA state, deployed on docker-server
+(`http://192.168.0.231:8850` — see the Holocron page under
+`docker-server/docker-services/kiosk-alarm-clock.md`), and running on the
+actual bedside tablet in Fully Kiosk. Everything below has been tested
+end-to-end against real HA, not just exercised in isolation:
 
-**Not usable yet** — two manual steps only Skip can do:
-1. Mint the dedicated **admin-scoped** HA long-lived token (see Secrets —
-   scope requirement changed this session) from its own restricted-but-
-   admin HA user.
-2. Open the app, go to Settings, enter the HA base URL + that token, and
-   the 6 entity IDs the app touches (2 duplicate "Ceiling Fan" and 2
-   duplicate "Master Bedroom Fan Light" entities were found live in HA —
-   pick the real ones there; Settings validates each field against HA
-   live).
+- Alarm create/edit/delete (HA WebSocket API — see Multi-alarm data
+  model for why this isn't the REST Config API originally planned),
+  including a real scheduled fire, the fail-open/smart-skip check
+  (`bedroom_occupancy`), and Skip Tonight (with a way to cancel it —
+  the "Skipped through…" pill is tappable).
+- Ringing screen: Dismiss and Snooze both confirmed against a live fire.
+- Lighting & Control: dimmer sliders, on/off, and the 4 fan speeds.
+- All 5 provided sound files (mixed mp3/wav/flac) play correctly.
+- Main-screen tile customization (drag reorder, icon/label/action).
 
-Also open: no Caddy-on-OPNsense route/friendly hostname yet (reachable by
-IP:port for now), and no Glance/Uptime Kuma/DIUN entries — deliberately
-left as a follow-up pending whether a personal bedside device needs that
-visibility infrastructure at all.
+Known still-open items, none blocking daily use:
+- No Caddy-on-OPNsense route/friendly hostname (reachable by IP:port),
+  no Glance/Uptime Kuma/DIUN — deliberately deferred, personal LAN-only
+  device.
+- Lighting & Control's 3 cards aren't customizable the way main-screen
+  tiles now are (see Backlog).
+- The original README's "tap connection icon → HA health popup" was
+  never built — out of scope so far.
