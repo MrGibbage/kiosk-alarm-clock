@@ -27,10 +27,13 @@ Deploy target: `/srv/kiosk-alarm-clock` on docker-server
 ## Screens
 
 1. **Main clock** — huge live clock, day/night toggle, HA connection
-   status icon, alarm/vacation status, 6 permanent action tiles. Tile
-   order/icon/label/action are now fully configurable (see screen 6,
-   **Customize Buttons**, built 2026-08-12) — the tile *count* stays
-   fixed at 6 (confirmed ceiling for a 10" screen), not the content.
+   status icon, alarm/vacation status, an occupancy status pill (built
+   2026-08-12 — shows whether the smart-alarm "already up" sensor
+   currently reads occupied, so a skipped alarm's cause is visible at a
+   glance), and 6 permanent action tiles. Tile order/icon/label/action
+   are now fully configurable (see screen 6, **Customize Buttons**,
+   built 2026-08-12) — the tile *count* stays fixed at 6 (confirmed
+   ceiling for a 10" screen), not the content.
 2. **Alarms** — list of independent alarms, each editable via an
    analog-dial time picker (tap/drag, Material-clock style), day-of-week
    repeat chips, and a sound picker (choose from uploaded audio/video
@@ -310,10 +313,34 @@ the files themselves.
   icon/label, filterable HA entity picker, drag reorder) — see Screens
   #6, Customize Buttons. Originally raised 2026-08-11 as three separate
   backlog items; built as one screen per the mockup review.
-- **Still open**: Lighting & Control's 3 cards (Ceiling Fan, Skip's
-  Light, Suzanne's Light) still have hardcoded labels/icons — Customize
-  Buttons only covers the main screen's 6-tile bar, not this screen.
-  Same underlying pattern would apply if/when this is wanted.
+- **Done 2026-08-12**: occupancy status indicator on the main screen (the
+  small pill next to the alarm/skip pills) — shows whether
+  `binary_sensor.bedroom_occupancy` currently reads occupied, so a
+  smart-skipped alarm's cause is visible at a glance without checking
+  HA directly. Currently **hardcoded** to that one entity, same as the
+  automation — see the next item.
+- **Open, raised 2026-08-12**: customizable Lighting & Control cards.
+  Same pattern as Customize Buttons (custom icon/label, entity picker,
+  reorder), applied to the Ceiling Fan / Skip's Light / Suzanne's Light
+  cards, which still have hardcoded labels/icons today.
+- **Open, raised 2026-08-12**: configurable occupancy entity/entities.
+  Right now "which sensor means the room is occupied" is hardcoded in
+  two places that have to be kept in sync by hand — the HA automation
+  (`kiosk_alarm.yaml`) and the new status pill's `OCCUPANCY_ENTITY`
+  constant in `main.js`. Needs a Settings field (or fields, if Skip
+  wants multiple sensors OR'd together) that both read from, likely
+  requiring the automation to read a `input_text`/similar HA helper the
+  app writes to rather than a value baked into the automation's YAML.
+- **Open, raised 2026-08-12**: per-alarm occupancy override. Today the
+  fail-open occupancy check applies globally to every alarm via the one
+  shared automation. Skip wants some alarms to ignore the occupancy
+  check entirely (always ring regardless of whether he's already up).
+  Likely needs a second per-alarm `input_boolean` (parallel to the
+  existing enabled/disabled one) and an added automation condition —
+  same "how do we identify which boolean belongs to which alarm"
+  problem the enabled/disabled toggle already solves via friendly_name
+  matching (see Multi-alarm data model), so extend that same mechanism
+  rather than inventing a new one.
 
 ## Status
 

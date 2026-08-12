@@ -210,6 +210,32 @@
   refreshPills();
   setInterval(refreshPills, 30000);
 
+  /* ---------- occupancy status ---------- */
+  /* Diagnostic only — lets Skip glance at the clock and see why a
+     smart-skipped alarm didn't ring (see kiosk_alarm.yaml's fail-open
+     occupancy condition). Hardcoded to match the entity hardcoded in
+     that automation, since there's no Settings field for it yet — see
+     README backlog item #3 (configurable occupancy entity). */
+  var OCCUPANCY_ENTITY = "binary_sensor.bedroom_occupancy";
+  var occupancyPill = document.getElementById("occupancyPill");
+  var occupancyPillText = document.getElementById("occupancyPillText");
+
+  function refreshOccupancy() {
+    HAClient.getState(OCCUPANCY_ENTITY).then(function (res) {
+      if (!res.ok || !res.data) {
+        occupancyPill.dataset.state = "";
+        occupancyPillText.textContent = "Occupancy —";
+        return;
+      }
+      var occupied = res.data.state === "on";
+      occupancyPill.dataset.state = occupied ? "occupied" : "";
+      occupancyPillText.textContent = occupied ? "Occupied" : "Clear";
+    });
+  }
+
+  refreshOccupancy();
+  setInterval(refreshOccupancy, 15000);
+
   /* ---------- ringing watcher ---------- */
 
   function pollRinging() {
