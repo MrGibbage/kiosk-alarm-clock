@@ -57,46 +57,53 @@
   }
 
   /* ---------- drag to reorder ---------- */
-  /* Moves the actual DOM node (rather than re-rendering) so a pointer
-     capture started on the grip survives the reorder; slots is resynced
-     from final DOM order on release, then persisted. */
+  /* Moves the actual DOM node (rather than re-rendering) so identity is
+     preserved across a reorder; slots is resynced from final DOM order
+     on release, then persisted.
+
+     Deliberately NOT using setPointerCapture — capturing on the grip and
+     then moving that same element via insertBefore/appendChild mid-drag
+     is a known cross-browser edge case (capture can silently stop
+     delivering events once its element is repositioned). Tracking via
+     document-level listeners added on pointerdown and torn down on
+     pointerup avoids that entirely and is the more battle-tested
+     pattern for custom drag implementations. */
 
   function wireDrag(tileEl) {
     var grip = tileEl.querySelector(".grip");
-    var dragging = false;
 
     grip.addEventListener("pointerdown", function (evt) {
-      dragging = true;
+      evt.preventDefault();
       tileEl.classList.add("is-dragging");
-      grip.setPointerCapture(evt.pointerId);
-    });
 
-    grip.addEventListener("pointermove", function (evt) {
-      if (!dragging) return;
-      var siblings = Array.prototype.slice.call(buttonBar.children).filter(function (c) { return c !== tileEl; });
-      var x = evt.clientX;
-      for (var i = 0; i < siblings.length; i++) {
-        var rect = siblings[i].getBoundingClientRect();
-        var mid = rect.left + rect.width / 2;
-        if (x < mid) {
-          buttonBar.insertBefore(tileEl, siblings[i]);
-          return;
+      function onMove(e) {
+        var siblings = Array.prototype.slice.call(buttonBar.children).filter(function (c) { return c !== tileEl; });
+        var x = e.clientX;
+        for (var i = 0; i < siblings.length; i++) {
+          var rect = siblings[i].getBoundingClientRect();
+          var mid = rect.left + rect.width / 2;
+          if (x < mid) {
+            buttonBar.insertBefore(tileEl, siblings[i]);
+            return;
+          }
         }
+        buttonBar.appendChild(tileEl);
       }
-      buttonBar.appendChild(tileEl);
+
+      function onUp() {
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+        document.removeEventListener("pointercancel", onUp);
+        tileEl.classList.remove("is-dragging");
+        var order = Array.prototype.slice.call(buttonBar.children).map(function (c) { return parseInt(c.dataset.id, 10); });
+        slots.sort(function (a, b) { return order.indexOf(a.id) - order.indexOf(b.id); });
+        persist();
+      }
+
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup", onUp);
+      document.addEventListener("pointercancel", onUp);
     });
-
-    function endDrag() {
-      if (!dragging) return;
-      dragging = false;
-      tileEl.classList.remove("is-dragging");
-      var order = Array.prototype.slice.call(buttonBar.children).map(function (c) { return parseInt(c.dataset.id, 10); });
-      slots.sort(function (a, b) { return order.indexOf(a.id) - order.indexOf(b.id); });
-      persist();
-    }
-
-    grip.addEventListener("pointerup", endDrag);
-    grip.addEventListener("pointercancel", endDrag);
   }
 
   /* ---------- config dialog ---------- */

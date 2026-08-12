@@ -130,6 +130,22 @@
     margin: 0 auto;
   }
 
+  .nav-btn {
+    flex: none;
+    display: block;
+    width: 100%;
+    max-width: 40rem;
+    margin: 0 auto 1rem;
+    padding: 0.75rem 1.1rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--panel-3);
+    background: var(--panel);
+    color: var(--ink);
+    font-size: 0.9rem;
+    cursor: pointer;
+    text-align: center;
+  }
+
   .btn {
     flex: 1;
     padding: 0.75rem 1.1rem;
@@ -145,6 +161,7 @@
   .icon-btn:focus-visible,
   .validate-btn:focus-visible,
   .btn:focus-visible,
+  .nav-btn:focus-visible,
   .label-input:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
@@ -167,7 +184,7 @@
     automatically as soon as they validate, and Back saves whatever's
     currently typed even if you haven't validated it yet.</p>
 
-  <button class="btn btn--ghost" type="button" id="customizeButtonsBtn" style="max-width: 40rem; width: 100%; margin: 0 auto 1rem; display: block;">Customize Main Screen Buttons →</button>
+  <button class="nav-btn" type="button" id="customizeButtonsBtn">Customize Main Screen Buttons →</button>
 
   <div class="settings-body" id="fieldContainer"></div>
 
