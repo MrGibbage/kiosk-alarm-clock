@@ -112,14 +112,23 @@ var ConfigStore = (function () {
     try { return JSON.parse(localStorage.getItem(MANAGED_ALARMS_KEY)) || []; } catch (e) { return []; }
   }
 
-  function addManagedAlarm(scheduleId, boolId) {
+  // occId (the per-alarm "ignore occupancy" input_boolean) is optional —
+  // alarms created before that feature existed simply won't have one yet,
+  // until it's lazily created on their next edit (see setManagedAlarmOccId).
+  function addManagedAlarm(scheduleId, boolId, occId) {
     var list = listManagedAlarms();
-    list.push({ scheduleId: scheduleId, boolId: boolId });
+    list.push({ scheduleId: scheduleId, boolId: boolId, occId: occId });
     localStorage.setItem(MANAGED_ALARMS_KEY, JSON.stringify(list));
   }
 
   function removeManagedAlarm(scheduleId) {
     var list = listManagedAlarms().filter(function (a) { return a.scheduleId !== scheduleId; });
+    localStorage.setItem(MANAGED_ALARMS_KEY, JSON.stringify(list));
+  }
+
+  function setManagedAlarmOccId(scheduleId, occId) {
+    var list = listManagedAlarms();
+    list.forEach(function (a) { if (a.scheduleId === scheduleId) a.occId = occId; });
     localStorage.setItem(MANAGED_ALARMS_KEY, JSON.stringify(list));
   }
 
@@ -259,6 +268,19 @@ var ConfigStore = (function () {
     if (LIGHTING_LAYOUTS[layout]) localStorage.setItem(LIGHTING_LAYOUT_KEY, layout);
   }
 
+  // Main-clock display: whether to show "9:41" instead of "09:41" in the
+  // (only supported, 12h) hour display. Off by default — matches the
+  // always-two-digit look the flip clock shipped with.
+  var HIDE_LEADING_HOUR_ZERO_KEY = "kioskAlarmClock.hideLeadingHourZero.v1";
+
+  function loadHideLeadingHourZero() {
+    return localStorage.getItem(HIDE_LEADING_HOUR_ZERO_KEY) === "1";
+  }
+
+  function saveHideLeadingHourZero(value) {
+    localStorage.setItem(HIDE_LEADING_HOUR_ZERO_KEY, value ? "1" : "0");
+  }
+
   return {
     FIELDS: FIELDS,
     FIXED: FIXED,
@@ -273,6 +295,7 @@ var ConfigStore = (function () {
     listManagedAlarms: listManagedAlarms,
     addManagedAlarm: addManagedAlarm,
     removeManagedAlarm: removeManagedAlarm,
+    setManagedAlarmOccId: setManagedAlarmOccId,
     loadButtons: loadButtons,
     saveButtons: saveButtons,
     loadOccupancyEntities: loadOccupancyEntities,
@@ -281,6 +304,8 @@ var ConfigStore = (function () {
     saveLightingCards: saveLightingCards,
     LIGHTING_LAYOUTS: LIGHTING_LAYOUTS,
     loadLightingLayout: loadLightingLayout,
-    saveLightingLayout: saveLightingLayout
+    saveLightingLayout: saveLightingLayout,
+    loadHideLeadingHourZero: loadHideLeadingHourZero,
+    saveHideLeadingHourZero: saveHideLeadingHourZero
   };
 })();

@@ -278,8 +278,8 @@
   }
 
   .dialog {
-    width: min(26rem, 92vw);
-    max-height: 92vh;
+    width: min(46rem, 94vw);
+    max-height: 94vh;
     overflow-y: auto;
     background: var(--panel);
     border-radius: 1rem;
@@ -288,6 +288,23 @@
     transform: scale(0.94) translateY(10px);
     opacity: 0;
     transition: transform 160ms ease, opacity 160ms ease;
+  }
+
+  /* Two columns side by side so the whole editor fits on a 10" kiosk
+     screen without scrolling — the dial is the tallest element by far,
+     so pairing it with the (much shorter) form fields rather than
+     stacking everything is what actually buys back the vertical space. */
+  .dialog-columns {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: clamp(1.25rem, 3vw, 2.25rem);
+    align-items: start;
+  }
+
+  .dialog-col--picker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
 
   .backdrop.is-open .dialog {
@@ -381,7 +398,10 @@
     user-select: none;
   }
 
-  .dial-face { fill: var(--panel-2); }
+  /* Fixed ivory face + dark ink, not tied to --panel-2/--ink — this dial
+     is meant to read like a physical clock face regardless of the app's
+     light/dark theme, so its numbers need to stay dark against it. */
+  .dial-face { fill: #f6ecdc; }
   .dial-center { fill: var(--accent); }
   .dial-hand { stroke: var(--accent); stroke-width: 2; }
   .dial-hand-end { fill: var(--accent); opacity: 0.28; }
@@ -392,7 +412,7 @@
     font-variant-numeric: tabular-nums;
     text-anchor: middle;
     dominant-baseline: central;
-    fill: var(--ink);
+    fill: #372c22;
     pointer-events: none;
   }
 
@@ -496,48 +516,61 @@
 
 <div class="backdrop" id="backdrop">
   <div class="dialog" role="dialog" aria-modal="true" aria-label="Edit alarm">
-    <div class="picker-header">
-      <button class="time-segment is-active" id="hourSegment" type="button">06</button>
-      <span class="time-colon">:</span>
-      <button class="time-segment" id="minuteSegment" type="button">30</button>
-      <div class="ampm-toggle">
-        <button class="ampm-btn" data-ampm="AM" type="button">AM</button>
-        <button class="ampm-btn" data-ampm="PM" type="button">PM</button>
+    <div class="dialog-columns">
+      <div class="dialog-col dialog-col--picker">
+        <div class="picker-header">
+          <button class="time-segment is-active" id="hourSegment" type="button">06</button>
+          <span class="time-colon">:</span>
+          <button class="time-segment" id="minuteSegment" type="button">30</button>
+          <div class="ampm-toggle">
+            <button class="ampm-btn" data-ampm="AM" type="button">AM</button>
+            <button class="ampm-btn" data-ampm="PM" type="button">PM</button>
+          </div>
+        </div>
+
+        <div class="dial-wrap">
+          <svg class="dial" id="dial" viewBox="0 0 240 240"></svg>
+        </div>
+
+        <button class="test-time-btn" id="testTimeBtn" type="button">Set to 1 min from now (testing)</button>
       </div>
-    </div>
 
-    <div class="dial-wrap">
-      <svg class="dial" id="dial" viewBox="0 0 240 240"></svg>
-    </div>
+      <div class="dialog-col">
+        <div class="field">
+          <span class="field-label">Repeat</span>
+          <div class="day-row" id="dayRow">
+            <button class="day-chip" type="button" data-day="0">S</button>
+            <button class="day-chip" type="button" data-day="1">M</button>
+            <button class="day-chip" type="button" data-day="2">T</button>
+            <button class="day-chip" type="button" data-day="3">W</button>
+            <button class="day-chip" type="button" data-day="4">T</button>
+            <button class="day-chip" type="button" data-day="5">F</button>
+            <button class="day-chip" type="button" data-day="6">S</button>
+          </div>
+        </div>
 
-    <button class="test-time-btn" id="testTimeBtn" type="button">Set to 1 min from now (testing)</button>
+        <div class="field">
+          <span class="field-label">Sound</span>
+          <button class="sound-trigger" id="soundTrigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+            <span id="soundTriggerIcon"></span>
+            <span class="sound-trigger-name" id="soundTriggerName">Chimes</span>
+            <svg class="sound-trigger-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+          </button>
+          <div class="sound-list" id="soundList" role="listbox" hidden></div>
+        </div>
 
-    <div class="field">
-      <span class="field-label">Repeat</span>
-      <div class="day-row" id="dayRow">
-        <button class="day-chip" type="button" data-day="0">S</button>
-        <button class="day-chip" type="button" data-day="1">M</button>
-        <button class="day-chip" type="button" data-day="2">T</button>
-        <button class="day-chip" type="button" data-day="3">W</button>
-        <button class="day-chip" type="button" data-day="4">T</button>
-        <button class="day-chip" type="button" data-day="5">F</button>
-        <button class="day-chip" type="button" data-day="6">S</button>
+        <div class="field">
+          <label class="field-label" for="labelInput">Label</label>
+          <input class="label-input" id="labelInput" type="text" value="Weekday" />
+        </div>
+
+        <div class="field">
+          <label style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer;">
+            <input type="checkbox" id="ignoreOccupancyCheckbox" style="width: 1.15rem; height: 1.15rem; flex: none;">
+            <span style="font-size: 0.9rem;">Always ring (ignore occupancy check)</span>
+          </label>
+        </div>
       </div>
-    </div>
-
-    <div class="field">
-      <span class="field-label">Sound</span>
-      <button class="sound-trigger" id="soundTrigger" type="button" aria-haspopup="listbox" aria-expanded="false">
-        <span id="soundTriggerIcon"></span>
-        <span class="sound-trigger-name" id="soundTriggerName">Chimes</span>
-        <svg class="sound-trigger-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
-      </button>
-      <div class="sound-list" id="soundList" role="listbox" hidden></div>
-    </div>
-
-    <div class="field">
-      <label class="field-label" for="labelInput">Label</label>
-      <input class="label-input" id="labelInput" type="text" value="Weekday" />
     </div>
 
     <p class="sheet-status" id="sheetStatus"></p>

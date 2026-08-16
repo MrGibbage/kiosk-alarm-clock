@@ -117,6 +117,34 @@ real app lives in `app/` (`css/tokens.css` factors that shared token
 system out of the mockups into one file); `mockups/` is kept as-is for
 reference, not wired to anything live.
 
+### Fully Kiosk / Android WebView gotchas (found 2026-08-16)
+
+Two separate issues surfaced while debugging why a CSS color change to
+the alarm editor's dial numbers (`.dial-number` in `alarms.html`) wasn't
+showing up on the actual tablet, worth checking first if a future style
+change silently doesn't take effect there:
+
+- **Force Dark repaints colors the app already controls.** Android
+  WebView's "Force Dark" heuristic, when a page hasn't opted out,
+  algorithmically relights colors it guesses are "dark text on white" —
+  even ones this app fully owns. It specifically skips saturated/vivid
+  colors (a pure-red test value rendered fine) but silently lightened a
+  neutral dark brown (`#372c22`) back to gray. Fixed by declaring
+  `color-scheme: light dark;` on `:root` in `css/tokens.css`, which
+  tells the engine this page manages its own theming — see the comment
+  there. If a future color change looks fine on desktop but wrong only
+  on the tablet, this is the first thing to suspect.
+- **Fully Kiosk's WebView cache didn't reliably revalidate.** Even with
+  `Cache-Control: no-cache` (see `Caddyfile`), reloading the page and
+  even fully restarting the Fully Kiosk app kept serving stale CSS/HTML
+  on the tablet — confirmed via `curl` from docker-server itself that
+  the container was serving the correct, updated bytes the whole time.
+  Switched to `Cache-Control: no-store` (never cache at all) — see the
+  `Caddyfile` comment. A device reboot (or Fully Kiosk's own explicit
+  "Clear Cache" action, distinct from just reloading) was what actually
+  flushed the existing stale cache; `no-store` should prevent it from
+  recurring going forward.
+
 ## Architecture
 
 - **Hosting**: Docker container `kiosk-alarm-clock` on docker-server
@@ -371,16 +399,21 @@ the files themselves.
   than an arbitrary-length list or a raw Jinja-template field — enough
   flexibility for realistic cases ("motion sensor OR bathroom light")
   without a full expression-builder UI Skip explicitly didn't want.
-- **Open, raised 2026-08-12**: per-alarm occupancy override. Today the
-  fail-open occupancy check applies globally to every alarm via the one
-  shared automation. Skip wants some alarms to ignore the occupancy
-  check entirely (always ring regardless of whether he's already up).
-  Likely needs a second per-alarm `input_boolean` (parallel to the
-  existing enabled/disabled one) and an added automation condition —
-  same "how do we identify which boolean belongs to which alarm"
-  problem the enabled/disabled toggle already solves via friendly_name
-  matching (see Multi-alarm data model), so extend that same mechanism
-  rather than inventing a new one.
+- **Done 2026-08-16**: per-alarm occupancy override, raised 2026-08-12.
+  Alarms screen editor gained an "Always ring (ignore occupancy check)"
+  checkbox. Built exactly as anticipated: a second per-alarm
+  `input_boolean` (`"<label> Ignore Occupancy"`), matched by the shared
+  automation via friendly_name the same way the enabled/disabled boolean
+  already is (see Multi-alarm data model) — no new identification
+  mechanism needed. The app tracks its entity id in
+  `ConfigStore.listManagedAlarms()` alongside `boolId`
+  (`addManagedAlarm`'s new third `occId` arg); alarms created before this
+  existed have no `occId` yet and get one lazily created on their next
+  edit (`ConfigStore.setManagedAlarmOccId`), rather than needing a
+  one-time migration pass. `automation/kiosk_alarm.yaml`'s occupancy
+  condition now short-circuits to "ring" whenever the matching Ignore
+  Occupancy boolean reads "on", ahead of the existing empty-list/none-
+  occupied fail-open checks.
 
 ## Status
 
@@ -406,7 +439,5 @@ Known still-open items, none blocking daily use:
 - No Caddy-on-OPNsense route/friendly hostname (reachable by IP:port),
   no Glance/Uptime Kuma/DIUN — deliberately deferred, personal LAN-only
   device.
-- Lighting & Control's 3 cards aren't customizable the way main-screen
-  tiles now are (see Backlog).
 - The original README's "tap connection icon → HA health popup" was
   never built — out of scope so far.

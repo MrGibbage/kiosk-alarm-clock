@@ -43,9 +43,15 @@
     minute: 30,
     ampm: "AM",
     days: [false, true, true, true, true, true, false],
-    sound: "chimes"
+    sound: "chimes",
+    ignoreOccupancy: false
   };
   var editingAlarm = null; // null = creating a new alarm
+
+  var ignoreOccupancyCheckbox = document.getElementById("ignoreOccupancyCheckbox");
+  ignoreOccupancyCheckbox.addEventListener("change", function () {
+    state.ignoreOccupancy = ignoreOccupancyCheckbox.checked;
+  });
 
   /* ---------- sound picker (mechanics unchanged from mockup) ---------- */
 
@@ -353,12 +359,14 @@
           objectId: objectId,
           scheduleId: m.scheduleId,
           boolId: m.boolId,
+          occId: m.occId,
           label: item.name || objectId,
           hour: parsed.hour,
           minute: parsed.minute,
           ampm: parsed.ampm,
           days: parsed.days,
-          enabled: boolStates[m.boolId] === "on"
+          enabled: boolStates[m.boolId] === "on",
+          ignoreOccupancy: !!m.occId && boolStates[m.occId] === "on"
         });
       });
       return alarms;
@@ -386,6 +394,7 @@
       state.ampm = alarm.ampm;
       state.days = alarm.days.slice();
       state.sound = ConfigStore.getAlarmSound(alarm.scheduleId, SOUNDS[0] && SOUNDS[0].id);
+      state.ignoreOccupancy = alarm.ignoreOccupancy;
       labelInput.value = alarm.label;
       deleteBtn.hidden = false;
     } else {
@@ -394,9 +403,11 @@
       state.ampm = "AM";
       state.days = [false, true, true, true, true, true, false];
       state.sound = (SOUNDS[0] && SOUNDS[0].id) || "chimes";
+      state.ignoreOccupancy = false;
       labelInput.value = "New Alarm";
       deleteBtn.hidden = true;
     }
+    ignoreOccupancyCheckbox.checked = state.ignoreOccupancy;
     state.mode = "hour";
     dayChipButtons.forEach(function (b) {
       var d = parseInt(b.dataset.day, 10);
@@ -427,6 +438,27 @@
     return res;
   }
 
+  // Mirrors the "Enabled" boolean's create-once-then-toggle pattern, but
+  // this one's optional: alarms created before this feature existed have
+  // no occId yet, so it's back-filled lazily on whatever edit happens to
+  // touch them next rather than needing a one-time migration pass.
+  function applyIgnoreOccupancy(alarm, label, wsCfg) {
+    if (alarm.occId) {
+      return HAClient.callService("input_boolean", state.ignoreOccupancy ? "turn_on" : "turn_off", { entity_id: alarm.occId })
+        .then(function (res) { assertOk(res, "Updating ignore-occupancy switch"); });
+    }
+    return HAWebSocket.call(wsCfg, "input_boolean/create", { name: label + " Ignore Occupancy", icon: "mdi:motion-sensor-off" })
+      .then(function (boolResult) {
+        var boolObjectId = boolResult && boolResult.id;
+        if (!boolObjectId) throw new Error("HA created the ignore-occupancy switch but didn't return its id");
+        var occId = "input_boolean." + boolObjectId;
+        ConfigStore.setManagedAlarmOccId(alarm.scheduleId, occId);
+        if (!state.ignoreOccupancy) return; // new booleans already default off
+        return HAClient.callService("input_boolean", "turn_on", { entity_id: occId })
+          .then(function (res) { assertOk(res, "Enabling ignore-occupancy switch"); });
+      });
+  }
+
   function applySave() {
     var label = labelInput.value || "Alarm";
     var payload = buildSchedulePayload(label); // {name, icon, monday: [...], ...}
@@ -442,24 +474,34 @@
       Object.keys(payload).forEach(function (k) { updatePayload[k] = payload[k]; });
       work = HAWebSocket.call(wsCfg, "schedule/update", updatePayload).then(function () {
         ConfigStore.setAlarmSound(editingAlarm.scheduleId, state.sound);
+        return applyIgnoreOccupancy(editingAlarm, label, wsCfg);
       });
     } else {
+      var newScheduleId, newBoolId;
       work = HAWebSocket.call(wsCfg, "schedule/create", payload).then(function (scheduleResult) {
         var scheduleObjectId = scheduleResult && scheduleResult.id;
         if (!scheduleObjectId) throw new Error("HA created the schedule but didn't return its id");
-        var scheduleId = "schedule." + scheduleObjectId;
-
-        return HAWebSocket.call(wsCfg, "input_boolean/create", { name: label + " Enabled", icon: "mdi:toggle-switch" })
-          .then(function (boolResult) {
-            var boolObjectId = boolResult && boolResult.id;
-            if (!boolObjectId) throw new Error("HA created the enabled switch but didn't return its id");
-            var boolId = "input_boolean." + boolObjectId;
-            return HAClient.callService("input_boolean", "turn_on", { entity_id: boolId }).then(function (res) {
-              assertOk(res, "Enabling new alarm");
-              ConfigStore.addManagedAlarm(scheduleId, boolId);
-              ConfigStore.setAlarmSound(scheduleId, state.sound);
-            });
-          });
+        newScheduleId = "schedule." + scheduleObjectId;
+        return HAWebSocket.call(wsCfg, "input_boolean/create", { name: label + " Enabled", icon: "mdi:toggle-switch" });
+      }).then(function (boolResult) {
+        var boolObjectId = boolResult && boolResult.id;
+        if (!boolObjectId) throw new Error("HA created the enabled switch but didn't return its id");
+        newBoolId = "input_boolean." + boolObjectId;
+        return HAClient.callService("input_boolean", "turn_on", { entity_id: newBoolId });
+      }).then(function (res) {
+        assertOk(res, "Enabling new alarm");
+        return HAWebSocket.call(wsCfg, "input_boolean/create", { name: label + " Ignore Occupancy", icon: "mdi:motion-sensor-off" });
+      }).then(function (occResult) {
+        var occObjectId = occResult && occResult.id;
+        if (!occObjectId) throw new Error("HA created the ignore-occupancy switch but didn't return its id");
+        var occId = "input_boolean." + occObjectId;
+        var setState = state.ignoreOccupancy
+          ? HAClient.callService("input_boolean", "turn_on", { entity_id: occId }).then(function (r) { assertOk(r, "Enabling ignore-occupancy switch"); })
+          : Promise.resolve();
+        return setState.then(function () {
+          ConfigStore.addManagedAlarm(newScheduleId, newBoolId, occId);
+          ConfigStore.setAlarmSound(newScheduleId, state.sound);
+        });
       });
     }
 
@@ -481,9 +523,15 @@
     var wsCfg = ConfigStore.load();
     var boolObjectId = alarm.boolId.slice("input_boolean.".length);
 
-    HAWebSocket.call(wsCfg, "schedule/delete", { schedule_id: alarm.objectId })
-      .then(function () { return HAWebSocket.call(wsCfg, "input_boolean/delete", { input_boolean_id: boolObjectId }); })
-      .then(function () {
+    var work = HAWebSocket.call(wsCfg, "schedule/delete", { schedule_id: alarm.objectId })
+      .then(function () { return HAWebSocket.call(wsCfg, "input_boolean/delete", { input_boolean_id: boolObjectId }); });
+
+    if (alarm.occId) {
+      var occObjectId = alarm.occId.slice("input_boolean.".length);
+      work = work.then(function () { return HAWebSocket.call(wsCfg, "input_boolean/delete", { input_boolean_id: occObjectId }); });
+    }
+
+    work.then(function () {
         ConfigStore.removeManagedAlarm(alarm.scheduleId);
         ConfigStore.removeAlarmSound(alarm.scheduleId);
         closeEditor();

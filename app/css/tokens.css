@@ -3,6 +3,17 @@
    screens should reuse these tokens rather than inventing a new look. */
 
 :root {
+  /* Without this, Android WebView's "Force Dark" heuristic sees a page
+     with no color-scheme opt-in and starts algorithmically relighting
+     colors it guesses are "dark text on white" — even ones the app
+     fully controls itself (see .dial-face/.dial-number in alarms.html:
+     a saturated test color like red passed through untouched, but a
+     neutral dark brown got auto-lightened to gray on Fully Kiosk,
+     2026-08-16). Declaring both schemes here tells the engine this page
+     already handles its own theming and to leave rendered colors alone.
+  */
+  color-scheme: light dark;
+
   --ground: #14110e;
   --panel: #211b16;
   --panel-2: #2a221c;

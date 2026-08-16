@@ -307,6 +307,12 @@
   <button class="nav-btn" type="button" id="customizeLightingBtn">Customize Lighting Cards →</button>
 
   <div class="settings-body" id="fieldContainer">
+    <div class="group-title">Clock</div>
+    <label class="field" style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer;">
+      <input type="checkbox" id="hideLeadingHourZeroCheckbox" style="width: 1.15rem; height: 1.15rem; flex: none;">
+      <span style="font-size: 0.9rem;">Hide leading zero on the hour (e.g. "9:41" instead of "09:41")</span>
+    </label>
+
     <div class="group-title">Occupancy Detection</div>
     <p class="settings-hint" style="margin-top: -0.4rem;">Optional — up to 2 entities. An alarm is skipped as "already up" if <strong>either</strong> reads "on". Leave both unset to always ring.</p>
 
@@ -352,6 +358,14 @@
     var lastGroup = null;
 
     /* ---------- occupancy entities (up to 2, OR'd) ---------- */
+
+    /* ---------- clock display ---------- */
+
+    var hideLeadingHourZeroCheckbox = document.getElementById("hideLeadingHourZeroCheckbox");
+    hideLeadingHourZeroCheckbox.checked = ConfigStore.loadHideLeadingHourZero();
+    hideLeadingHourZeroCheckbox.addEventListener("change", function () {
+      ConfigStore.saveHideLeadingHourZero(hideLeadingHourZeroCheckbox.checked);
+    });
 
     var occSlots = ConfigStore.loadOccupancyEntities();
     var occAllEntities = []; // populated once from HA for the search picker

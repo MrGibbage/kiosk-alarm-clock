@@ -9,6 +9,7 @@
   }
 
   var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var hideLeadingHourZero = ConfigStore.loadHideLeadingHourZero();
 
   /* ---------- flip clock (unchanged from mockup) ---------- */
 
@@ -89,7 +90,16 @@
     var hh = String(h12).padStart(2, "0");
     var mm = String(now.getMinutes()).padStart(2, "0");
 
-    setDigit(digits.h1, hh[0]);
+    var showHourTens = !(hideLeadingHourZero && h12 < 10);
+    if (showHourTens) {
+      // Coming back from hidden — snap the digit in instead of flipping
+      // from whatever stale value it last held while off-screen.
+      if (digits.h1.hidden) digits.h1._value = null;
+      digits.h1.hidden = false;
+      setDigit(digits.h1, hh[0]);
+    } else {
+      digits.h1.hidden = true;
+    }
     setDigit(digits.h2, hh[1]);
     setDigit(digits.m1, mm[0]);
     setDigit(digits.m2, mm[1]);

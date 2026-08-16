@@ -4,7 +4,11 @@
 	encode gzip
 	# No Cache-Control was being sent at all, which left browsers free to
 	# use their own heuristics — reloading the page could still serve a
-	# stale cached main.js. Force revalidation on every request; ETag/
-	# Last-Modified still let unchanged files come back as a cheap 304.
-	header Cache-Control "no-cache"
+	# stale cached main.js. `no-cache` (revalidate-before-use) was the
+	# first fix, but Fully Kiosk's WebView still served stale CSS through
+	# reloads and even full app restarts (2026-08-16) — its disk cache
+	# isn't reliably revalidating on Cache-Control: no-cache. `no-store`
+	# is the blunter, actually-reliable fix: never cache this app's files
+	# at all. Fine for a small local kiosk app under active iteration.
+	header Cache-Control "no-store"
 }
