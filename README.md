@@ -292,6 +292,35 @@ Instead:
   a last-synced timestamp so it's clear how fresh the status actually
   is (not just up/down as of some unknown point).
 
+### Day/night theme (built 2026-08-19)
+
+The existing light/dark palette (`css/tokens.css`) doubles as the day/night
+theme rather than adding a third mode — "dark" was retuned to a much
+dimmer bedside look (near-black background, flap cards barely lifted off
+it, gray rather than white digits) and "light" to plain black-on-white.
+
+Source of truth is `input_boolean.kiosk_alarm_night_mode` in HA (added to
+`configuration.yaml` on the `homeassistant` host, reloaded via
+`input_boolean.reload` — no restart needed). The app polls it on the same
+30s cadence as the other status pills (`main.js` `refreshTheme`) and sets
+`data-theme` accordingly; the sun/moon button writes back to the same
+boolean via `input_boolean.turn_on`/`turn_off` instead of setting
+`data-theme` directly, so a manual tap and the next poll never fight.
+
+**Triggering**: an HA automation (`automation/kiosk_night_mode.yaml` on
+the `homeassistant` host), not Tasker — HA's own `sun.sun` entity already
+computes sunset/sunrise (it's what backs the `platform: sun` trigger),
+so there's no reason to round-trip through the tablet's Tasker at all.
+Two single-purpose automations, `kiosk_alarm_night_mode_on` (trigger:
+`sun`/`sunset`) and `kiosk_alarm_night_mode_off` (trigger: `sun`/
+`sunrise`), each just flip the one boolean. Tasker's existing sunset/
+sunrise profiles are unrelated — they still handle screen brightness
+dim/undim only, untouched by this feature.
+
+Falls open sensibly if HA restarts right around sunset/sunrise: the
+boolean just keeps its last value until the automation next fires, so
+the theme doesn't flap.
+
 ## Secrets
 
 **No secrets in the compose file, and — as it turned out — none needed

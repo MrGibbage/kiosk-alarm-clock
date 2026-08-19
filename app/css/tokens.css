@@ -14,56 +14,63 @@
   */
   color-scheme: light dark;
 
-  --ground: #14110e;
-  --panel: #211b16;
-  --panel-2: #2a221c;
-  --panel-3: #332a22;
-  --ink: #f4e9d8;
-  --muted: #93857a;
-  --accent: #f2a93b;
+  /* "Dark" doubles as the bedside night theme (see main.js's HA-driven
+     refreshTheme) — deliberately near-black with the flap cards barely
+     lifted off the background, and gray (not white) digits, so it reads
+     as dim rather than glowing at 2am. See README's day/night section
+     (2026-08-19) for the sunset/sunrise wiring. */
+  --ground: #0b0a08;
+  --panel: #110f0c;
+  --panel-2: #161310;
+  --panel-3: #1b1712;
+  --ink: #6e6a63;
+  --muted: #46433c;
+  --accent: #b5762a;
   --accent-ink: #1a1209;
-  --hinge: #0b0908;
+  --hinge: #050403;
   --shadow: rgba(0, 0, 0, 0.55);
 }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --ground: #f3ece1;
-    --panel: #e7ddcc;
-    --panel-2: #ded2bd;
-    --panel-3: #d4c6ac;
-    --ink: #2b2420;
-    --muted: #8a7b6c;
+    /* "Light" doubles as the daytime theme — plain black-on-white, the
+       opposite extreme from the dim night theme above. */
+    --ground: #ffffff;
+    --panel: #f6f6f6;
+    --panel-2: #ececec;
+    --panel-3: #e2e2e2;
+    --ink: #000000;
+    --muted: #555555;
     --accent: #b5701f;
-    --accent-ink: #fdf6ea;
-    --hinge: #c9baa4;
-    --shadow: rgba(60, 45, 25, 0.18);
+    --accent-ink: #ffffff;
+    --hinge: #d8d8d8;
+    --shadow: rgba(0, 0, 0, 0.12);
   }
 }
 
 :root[data-theme="light"] {
-  --ground: #f3ece1;
-  --panel: #e7ddcc;
-  --panel-2: #ded2bd;
-  --panel-3: #d4c6ac;
-  --ink: #2b2420;
-  --muted: #8a7b6c;
+  --ground: #ffffff;
+  --panel: #f6f6f6;
+  --panel-2: #ececec;
+  --panel-3: #e2e2e2;
+  --ink: #000000;
+  --muted: #555555;
   --accent: #b5701f;
-  --accent-ink: #fdf6ea;
-  --hinge: #c9baa4;
-  --shadow: rgba(60, 45, 25, 0.18);
+  --accent-ink: #ffffff;
+  --hinge: #d8d8d8;
+  --shadow: rgba(0, 0, 0, 0.12);
 }
 
 :root[data-theme="dark"] {
-  --ground: #14110e;
-  --panel: #211b16;
-  --panel-2: #2a221c;
-  --panel-3: #332a22;
-  --ink: #f4e9d8;
-  --muted: #93857a;
-  --accent: #f2a93b;
+  --ground: #0b0a08;
+  --panel: #110f0c;
+  --panel-2: #161310;
+  --panel-3: #1b1712;
+  --ink: #6e6a63;
+  --muted: #46433c;
+  --accent: #b5762a;
   --accent-ink: #1a1209;
-  --hinge: #0b0908;
+  --hinge: #050403;
   --shadow: rgba(0, 0, 0, 0.55);
 }
 

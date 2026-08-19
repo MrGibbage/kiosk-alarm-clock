@@ -10,6 +10,7 @@
 
   var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var hideLeadingHourZero = ConfigStore.loadHideLeadingHourZero();
+  var FIXED = ConfigStore.FIXED;
 
   /* ---------- flip clock (unchanged from mockup) ---------- */
 
@@ -113,16 +114,34 @@
   tick();
   setInterval(tick, 1000);
 
-  /* ---------- theme toggle (unchanged from mockup) ---------- */
+  /* ---------- day/night theme ---------- */
+  /* Source of truth is input_boolean.kiosk_alarm_night_mode in HA — Tasker
+     flips it at sunset/sunrise (the same profiles that already dim/undim
+     the tablet's screen brightness, 2026-08-19), and this polls it on the
+     same 30s cadence as the other pills. The sun/moon button writes back
+     to that same boolean instead of setting data-theme directly, so a
+     manual tap and the next poll never fight each other. */
 
   var toggle = document.getElementById("themeToggle");
   var root = document.documentElement;
+
+  function applyTheme(isNight) {
+    root.setAttribute("data-theme", isNight ? "dark" : "light");
+  }
+
+  function refreshTheme() {
+    HAClient.getState(FIXED.nightMode).then(function (res) {
+      if (res.ok && res.data) applyTheme(res.data.state === "on");
+    });
+  }
+
+  refreshTheme();
+  setInterval(refreshTheme, 30000);
+
   toggle.addEventListener("click", function () {
-    var current = root.getAttribute("data-theme");
-    var isDark = current
-      ? current === "dark"
-      : window.matchMedia("(prefers-color-scheme: dark)").matches;
-    root.setAttribute("data-theme", isDark ? "light" : "dark");
+    var isNight = root.getAttribute("data-theme") === "dark";
+    HAClient.callService("input_boolean", isNight ? "turn_off" : "turn_on", { entity_id: FIXED.nightMode })
+      .then(refreshTheme);
   });
 
   document.getElementById("settingsBtn").addEventListener("click", function () {
@@ -154,7 +173,6 @@
   var alarmPillText = document.getElementById("alarmPillText");
   var skipPill = document.getElementById("skipPill");
   var skipPillText = document.getElementById("skipPillText");
-  var FIXED = ConfigStore.FIXED;
 
   function goToAlarms() { window.location.href = "alarms.html"; }
 
@@ -196,9 +214,13 @@
       // alarm time" — HA schedule helpers don't reliably expose a single
       // "next on" timestamp attribute across versions, and getting that
       // math wrong is worse than a simple honest count.
+      // Kept short ("No alarms" / "1 alarm", not "...enabled") so the
+      // status row stays on one line at the doubled pill font size
+      // (2026-08-19) — a wrapped row pushes the bottom tile row off an
+      // 800px-tall kiosk screen.
       alarmPillText.textContent = enabledCount === 0
-        ? "No alarms enabled"
-        : enabledCount + " alarm" + (enabledCount === 1 ? "" : "s") + " enabled";
+        ? "No alarms"
+        : enabledCount + " alarm" + (enabledCount === 1 ? "" : "s");
 
       var skipEntity = res.data.filter(function (e) { return e.entity_id === FIXED.skipUntil; })[0];
       if (skipEntity && skipEntity.state && skipEntity.state !== "unknown" && skipEntity.state !== "unavailable") {
@@ -206,7 +228,7 @@
         var today = new Date();
         today.setHours(0, 0, 0, 0);
         if (skipDate >= today) {
-          skipPillText.textContent = "Skipped through " + skipDate.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+          skipPillText.textContent = "Thru " + skipDate.toLocaleDateString(undefined, { month: "short", day: "numeric" });
           skipPill.hidden = false;
         } else {
           skipPill.hidden = true;
@@ -232,7 +254,7 @@
     var slots = ConfigStore.loadOccupancyEntities().filter(Boolean);
     if (!slots.length) {
       occupancyPill.dataset.state = "";
-      occupancyPillText.textContent = "Occupancy not set";
+      occupancyPillText.textContent = "Not set";
       return;
     }
     Promise.all(slots.map(function (s) { return HAClient.getState(s.id); })).then(function (results) {

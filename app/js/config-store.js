@@ -73,7 +73,8 @@ var ConfigStore = (function () {
     ringing: "input_boolean.kiosk_alarm_ringing",
     ringingSource: "input_text.kiosk_alarm_ringing_source",
     snoozeTimer: "timer.kiosk_alarm_snooze",
-    occupancyEntities: "input_text.kiosk_alarm_occupancy_entities"
+    occupancyEntities: "input_text.kiosk_alarm_occupancy_entities",
+    nightMode: "input_boolean.kiosk_alarm_night_mode"
   };
 
   // Per-alarm sound selection — see README's "local config file" decision.
