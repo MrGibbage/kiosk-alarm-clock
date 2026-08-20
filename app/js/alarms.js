@@ -44,13 +44,19 @@
     ampm: "AM",
     days: [false, true, true, true, true, true, false],
     sound: "chimes",
-    ignoreOccupancy: false
+    ignoreOccupancy: false,
+    ringWhenSkipped: false
   };
   var editingAlarm = null; // null = creating a new alarm
 
   var ignoreOccupancyCheckbox = document.getElementById("ignoreOccupancyCheckbox");
   ignoreOccupancyCheckbox.addEventListener("change", function () {
     state.ignoreOccupancy = ignoreOccupancyCheckbox.checked;
+  });
+
+  var ringWhenSkippedCheckbox = document.getElementById("ringWhenSkippedCheckbox");
+  ringWhenSkippedCheckbox.addEventListener("change", function () {
+    state.ringWhenSkipped = ringWhenSkippedCheckbox.checked;
   });
 
   /* ---------- sound picker (mechanics unchanged from mockup) ---------- */
@@ -360,13 +366,15 @@
           scheduleId: m.scheduleId,
           boolId: m.boolId,
           occId: m.occId,
+          skipOverrideId: m.skipOverrideId,
           label: item.name || objectId,
           hour: parsed.hour,
           minute: parsed.minute,
           ampm: parsed.ampm,
           days: parsed.days,
           enabled: boolStates[m.boolId] === "on",
-          ignoreOccupancy: !!m.occId && boolStates[m.occId] === "on"
+          ignoreOccupancy: !!m.occId && boolStates[m.occId] === "on",
+          ringWhenSkipped: !!m.skipOverrideId && boolStates[m.skipOverrideId] === "on"
         });
       });
       return alarms;
@@ -395,6 +403,7 @@
       state.days = alarm.days.slice();
       state.sound = ConfigStore.getAlarmSound(alarm.scheduleId, SOUNDS[0] && SOUNDS[0].id);
       state.ignoreOccupancy = alarm.ignoreOccupancy;
+      state.ringWhenSkipped = alarm.ringWhenSkipped;
       labelInput.value = alarm.label;
       deleteBtn.hidden = false;
     } else {
@@ -404,10 +413,12 @@
       state.days = [false, true, true, true, true, true, false];
       state.sound = (SOUNDS[0] && SOUNDS[0].id) || "chimes";
       state.ignoreOccupancy = false;
+      state.ringWhenSkipped = false;
       labelInput.value = "New Alarm";
       deleteBtn.hidden = true;
     }
     ignoreOccupancyCheckbox.checked = state.ignoreOccupancy;
+    ringWhenSkippedCheckbox.checked = state.ringWhenSkipped;
     state.mode = "hour";
     dayChipButtons.forEach(function (b) {
       var d = parseInt(b.dataset.day, 10);
@@ -459,6 +470,26 @@
       });
   }
 
+  // Mirrors applyIgnoreOccupancy exactly, for the separate "ring even if
+  // globally skipped" per-alarm override (kiosk_alarm.yaml ORs this in
+  // alongside the skip_until check).
+  function applyRingWhenSkipped(alarm, label, wsCfg) {
+    if (alarm.skipOverrideId) {
+      return HAClient.callService("input_boolean", state.ringWhenSkipped ? "turn_on" : "turn_off", { entity_id: alarm.skipOverrideId })
+        .then(function (res) { assertOk(res, "Updating ring-when-skipped switch"); });
+    }
+    return HAWebSocket.call(wsCfg, "input_boolean/create", { name: label + " Ring When Skipped", icon: "mdi:alarm-check" })
+      .then(function (boolResult) {
+        var boolObjectId = boolResult && boolResult.id;
+        if (!boolObjectId) throw new Error("HA created the ring-when-skipped switch but didn't return its id");
+        var skipOverrideId = "input_boolean." + boolObjectId;
+        ConfigStore.setManagedAlarmSkipOverrideId(alarm.scheduleId, skipOverrideId);
+        if (!state.ringWhenSkipped) return; // new booleans already default off
+        return HAClient.callService("input_boolean", "turn_on", { entity_id: skipOverrideId })
+          .then(function (res) { assertOk(res, "Enabling ring-when-skipped switch"); });
+      });
+  }
+
   function applySave() {
     var label = labelInput.value || "Alarm";
     var payload = buildSchedulePayload(label); // {name, icon, monday: [...], ...}
@@ -475,9 +506,11 @@
       work = HAWebSocket.call(wsCfg, "schedule/update", updatePayload).then(function () {
         ConfigStore.setAlarmSound(editingAlarm.scheduleId, state.sound);
         return applyIgnoreOccupancy(editingAlarm, label, wsCfg);
+      }).then(function () {
+        return applyRingWhenSkipped(editingAlarm, label, wsCfg);
       });
     } else {
-      var newScheduleId, newBoolId;
+      var newScheduleId, newBoolId, newOccId;
       work = HAWebSocket.call(wsCfg, "schedule/create", payload).then(function (scheduleResult) {
         var scheduleObjectId = scheduleResult && scheduleResult.id;
         if (!scheduleObjectId) throw new Error("HA created the schedule but didn't return its id");
@@ -494,12 +527,22 @@
       }).then(function (occResult) {
         var occObjectId = occResult && occResult.id;
         if (!occObjectId) throw new Error("HA created the ignore-occupancy switch but didn't return its id");
-        var occId = "input_boolean." + occObjectId;
+        newOccId = "input_boolean." + occObjectId;
         var setState = state.ignoreOccupancy
-          ? HAClient.callService("input_boolean", "turn_on", { entity_id: occId }).then(function (r) { assertOk(r, "Enabling ignore-occupancy switch"); })
+          ? HAClient.callService("input_boolean", "turn_on", { entity_id: newOccId }).then(function (r) { assertOk(r, "Enabling ignore-occupancy switch"); })
           : Promise.resolve();
         return setState.then(function () {
-          ConfigStore.addManagedAlarm(newScheduleId, newBoolId, occId);
+          return HAWebSocket.call(wsCfg, "input_boolean/create", { name: label + " Ring When Skipped", icon: "mdi:alarm-check" });
+        });
+      }).then(function (skipResult) {
+        var skipObjectId = skipResult && skipResult.id;
+        if (!skipObjectId) throw new Error("HA created the ring-when-skipped switch but didn't return its id");
+        var skipOverrideId = "input_boolean." + skipObjectId;
+        var setState = state.ringWhenSkipped
+          ? HAClient.callService("input_boolean", "turn_on", { entity_id: skipOverrideId }).then(function (r) { assertOk(r, "Enabling ring-when-skipped switch"); })
+          : Promise.resolve();
+        return setState.then(function () {
+          ConfigStore.addManagedAlarm(newScheduleId, newBoolId, newOccId, skipOverrideId);
           ConfigStore.setAlarmSound(newScheduleId, state.sound);
         });
       });
@@ -529,6 +572,11 @@
     if (alarm.occId) {
       var occObjectId = alarm.occId.slice("input_boolean.".length);
       work = work.then(function () { return HAWebSocket.call(wsCfg, "input_boolean/delete", { input_boolean_id: occObjectId }); });
+    }
+
+    if (alarm.skipOverrideId) {
+      var skipOverrideObjectId = alarm.skipOverrideId.slice("input_boolean.".length);
+      work = work.then(function () { return HAWebSocket.call(wsCfg, "input_boolean/delete", { input_boolean_id: skipOverrideObjectId }); });
     }
 
     work.then(function () {

@@ -113,12 +113,14 @@ var ConfigStore = (function () {
     try { return JSON.parse(localStorage.getItem(MANAGED_ALARMS_KEY)) || []; } catch (e) { return []; }
   }
 
-  // occId (the per-alarm "ignore occupancy" input_boolean) is optional —
-  // alarms created before that feature existed simply won't have one yet,
-  // until it's lazily created on their next edit (see setManagedAlarmOccId).
-  function addManagedAlarm(scheduleId, boolId, occId) {
+  // occId (the per-alarm "ignore occupancy" input_boolean) and
+  // skipOverrideId (the per-alarm "ring when skipped" input_boolean) are
+  // both optional — alarms created before either feature existed simply
+  // won't have one yet, until it's lazily created on their next edit (see
+  // setManagedAlarmOccId / setManagedAlarmSkipOverrideId).
+  function addManagedAlarm(scheduleId, boolId, occId, skipOverrideId) {
     var list = listManagedAlarms();
-    list.push({ scheduleId: scheduleId, boolId: boolId, occId: occId });
+    list.push({ scheduleId: scheduleId, boolId: boolId, occId: occId, skipOverrideId: skipOverrideId });
     localStorage.setItem(MANAGED_ALARMS_KEY, JSON.stringify(list));
   }
 
@@ -130,6 +132,12 @@ var ConfigStore = (function () {
   function setManagedAlarmOccId(scheduleId, occId) {
     var list = listManagedAlarms();
     list.forEach(function (a) { if (a.scheduleId === scheduleId) a.occId = occId; });
+    localStorage.setItem(MANAGED_ALARMS_KEY, JSON.stringify(list));
+  }
+
+  function setManagedAlarmSkipOverrideId(scheduleId, skipOverrideId) {
+    var list = listManagedAlarms();
+    list.forEach(function (a) { if (a.scheduleId === scheduleId) a.skipOverrideId = skipOverrideId; });
     localStorage.setItem(MANAGED_ALARMS_KEY, JSON.stringify(list));
   }
 
@@ -297,6 +305,7 @@ var ConfigStore = (function () {
     addManagedAlarm: addManagedAlarm,
     removeManagedAlarm: removeManagedAlarm,
     setManagedAlarmOccId: setManagedAlarmOccId,
+    setManagedAlarmSkipOverrideId: setManagedAlarmSkipOverrideId,
     loadButtons: loadButtons,
     saveButtons: saveButtons,
     loadOccupancyEntities: loadOccupancyEntities,

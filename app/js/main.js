@@ -171,8 +171,13 @@
   /* ---------- alarm / skip pills ---------- */
 
   var alarmPillText = document.getElementById("alarmPillText");
-  var skipPill = document.getElementById("skipPill");
-  var skipPillText = document.getElementById("skipPillText");
+  // Epoch ms the current skip runs until, or 0 if none active — populated by
+  // refreshPills() from input_datetime's own `timestamp` attribute (HA
+  // computes this for us regardless of has_time), read by skipTonight() to
+  // decide tap-to-arm vs tap-to-cancel on the tile itself (see "reversed
+  // icon, no banner" — the "Skipped through…" pill this used to live in is
+  // gone).
+  var skipUntilMs = 0;
 
   function goToAlarms() { window.location.href = "alarms.html"; }
 
@@ -182,19 +187,6 @@
   clockLink.addEventListener("click", goToAlarms);
   clockLink.addEventListener("keydown", function (evt) {
     if (evt.key === "Enter" || evt.key === " ") { evt.preventDefault(); goToAlarms(); }
-  });
-
-  skipPill.addEventListener("click", function () {
-    // input_datetime has no "clear" service — setting it to yesterday is
-    // what actually cancels the skip, since the automation's condition is
-    // "skip_until < today". Tapping Skip Tonight again re-arms it fine.
-    var yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    var iso = yesterday.toISOString().slice(0, 10);
-    HAClient.callService("input_datetime", "set_datetime", {
-      entity_id: FIXED.skipUntil,
-      date: iso
-    }).then(refreshPills);
   });
 
   function refreshPills() {
@@ -223,23 +215,20 @@
         : enabledCount + " alarm" + (enabledCount === 1 ? "" : "s");
 
       var skipEntity = res.data.filter(function (e) { return e.entity_id === FIXED.skipUntil; })[0];
-      if (skipEntity && skipEntity.state && skipEntity.state !== "unknown" && skipEntity.state !== "unavailable") {
-        var skipDate = new Date(skipEntity.state + "T00:00:00");
-        var today = new Date();
-        today.setHours(0, 0, 0, 0);
-        if (skipDate >= today) {
-          skipPillText.textContent = "Thru " + skipDate.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-          skipPill.hidden = false;
-        } else {
-          skipPill.hidden = true;
-        }
-      } else {
-        skipPill.hidden = true;
-      }
+      skipUntilMs = (skipEntity && skipEntity.attributes && typeof skipEntity.attributes.timestamp === "number")
+        ? skipEntity.attributes.timestamp * 1000
+        : 0;
+      // No banner for this any more — the Skip Tonight tile's own icon
+      // inverts (filled accent background, see index.html's .is-skipping)
+      // for as long as skip is active.
+      var skipTile = buttonsNav.querySelector('[data-action="skip_tonight"]');
+      if (skipTile) skipTile.classList.toggle("is-skipping", skipUntilMs > Date.now());
     });
   }
 
-  refreshPills();
+  // First call is deferred until after tiles are built below — refreshPills
+  // looks up the Skip Tonight tile by data-action, which doesn't exist yet
+  // this early in the script.
   setInterval(refreshPills, 30000);
 
   /* ---------- occupancy status ---------- */
@@ -284,14 +273,25 @@
      slot, editable via buttons.html) rather than fixed markup — see the
      button-config-screen mockup (2026-08-12) this implements. */
 
-  function skipTonight() {
-    var tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    var iso = tomorrow.toISOString().slice(0, 10);
-    HAClient.callService("input_datetime", "set_datetime", {
+  // input_datetime has no "clear" service — setting it a minute in the past
+  // is what actually cancels a skip in progress, since the automation's
+  // condition is "skip_until < now". Tapping the tile while already skipping
+  // cancels; tapping while idle arms a fresh rolling 23h59m window.
+  function setSkipUntil(d) {
+    var pad = function (n) { return String(n).padStart(2, "0"); };
+    return HAClient.callService("input_datetime", "set_datetime", {
       entity_id: FIXED.skipUntil,
-      date: iso
+      date: d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()),
+      time: pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds())
     }).then(refreshPills);
+  }
+
+  function skipTonight() {
+    if (skipUntilMs > Date.now()) {
+      setSkipUntil(new Date(Date.now() - 60000));
+      return;
+    }
+    setSkipUntil(new Date(Date.now() + (23 * 60 + 59) * 60 * 1000));
   }
 
   function snooze() {
@@ -321,8 +321,11 @@
     var tile = document.createElement("button");
     tile.className = "tile";
     tile.type = "button";
+    if (btn.type === "app") tile.dataset.action = btn.action;
     tile.innerHTML = Icons.svg(btn.icon) + "<span>" + btn.label + "</span>";
     tile.addEventListener("click", function () { activateButton(btn); });
     buttonsNav.appendChild(tile);
   });
+
+  refreshPills();
 })();

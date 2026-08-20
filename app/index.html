@@ -73,7 +73,6 @@
   .pill--alarm svg { color: var(--accent); }
   .pill--alarm:active { transform: translateY(1px); background: var(--panel-2); }
 
-  .pill--vacation { opacity: 0.85; }
   .pill[hidden] { display: none; }
 
   /* Diagnostic, not interactive — lets Skip glance at the clock and see
@@ -318,6 +317,14 @@
     pointer-events: none;
     transition: opacity 200ms ease, filter 200ms ease;
   }
+
+  /* Skip Tonight while a skip is active — reuses the same filled-swatch
+     "selected" look as .icon-swatch.is-selected (buttons.html) instead of a
+     separate banner/pill. --accent-ink already flips per theme (near-black
+     in night mode, white in day mode), so no extra theme handling needed. */
+  .tile.is-skipping { background: var(--accent); }
+  .tile.is-skipping svg,
+  .tile.is-skipping span { color: var(--accent-ink); }
 </style>
 </head>
 <body>
@@ -328,10 +335,6 @@
       <button class="pill pill--alarm" type="button" id="alarmPill" aria-label="Manage alarms">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a6 6 0 0 0-6 6c0 3.2-1 4.5-2 5.5h16c-1-1-2-2.3-2-5.5a6 6 0 0 0-6-6Z"></path><path d="M10.3 19.5a2 2 0 0 0 3.4 0"></path></svg>
         <span id="alarmPillText">No alarms enabled</span>
-      </button>
-      <button class="pill pill--alarm pill--vacation" type="button" id="skipPill" aria-label="Cancel skip" hidden>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="1.5"></rect><path d="M9 8V6a3 3 0 0 1 3-3v0a3 3 0 0 1 3 3v2"></path></svg>
-        <span id="skipPillText">Skipped</span>
       </button>
       <div class="pill pill--occupancy" id="occupancyPill" aria-label="Bedroom occupancy status">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"></circle><path d="M5 20c0-4.2 3.1-6.5 7-6.5s7 2.3 7 6.5"></path></svg>

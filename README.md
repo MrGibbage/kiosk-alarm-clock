@@ -199,12 +199,15 @@ change silently doesn't take effect there:
   switch. One shared HA automation triggers off *any* schedule turning
   on, so skip/condition logic lives in one place, not duplicated per
   alarm.
-- **Skipping is unified, not per-alarm**: a single `input_datetime.skip_until`
-  date field, checked by every alarm's automation. "Skip Tonight" is a
-  one-tap shortcut that just sets this to tomorrow's date; vacation mode
+- **Skipping is unified by default, with an opt-in per-alarm override**: a
+  single `input_datetime.skip_until` field, checked by every alarm's
+  automation. "Skip Tonight" is a one-tap shortcut that arms a rolling
+  23h59m window from the tap (see "Done 2026-08-20" below); vacation mode
   sets it further out via the HA app. Since every alarm checks the same
   field, a skip is global by default — matches the "I have PTO tomorrow,
-  turn the alarm off" mental model (not per-alarm bookkeeping). A
+  turn the alarm off" mental model (not per-alarm bookkeeping) — while the
+  per-alarm "Ring When Skipped" override (also 2026-08-20) covers the
+  minority case of one alarm that should ring through it anyway. A
   separate per-alarm `enabled` toggle (in the Alarms screen) exists for
   longer-lived decisions like "permanently disable my weekend alarm."
 - **Sound**: each alarm stores which uploaded audio/video file to play
@@ -443,6 +446,27 @@ the files themselves.
   condition now short-circuits to "ring" whenever the matching Ignore
   Occupancy boolean reads "on", ahead of the existing empty-list/none-
   occupied fail-open checks.
+- **Done 2026-08-20**: Skip Tonight redefined as a precise rolling 23h59m
+  window instead of an end-of-tomorrow date, with the top-of-screen
+  "Skipped through…" pill replaced by an inverted Skip Tonight tile icon
+  (filled with `--accent`, icon/label in `--accent-ink` — black-on-orange
+  in night mode, white-on-orange in day mode; same "filled swatch" pattern
+  as `.icon-swatch.is-selected` elsewhere in the app). `input_datetime.
+  kiosk_alarm_skip_until` (on the `homeassistant` host, not this repo)
+  gained `has_time: true`, and `kiosk_alarm.yaml`'s skip condition now
+  compares `as_timestamp()` against `now()` rather than a date string.
+  Tapping the tile while already skipping cancels early (writes a
+  timestamp a minute in the past); tapping while idle arms `now + 23h59m`.
+  Also added a per-alarm skip override — "Always ring (ignore skip)" in
+  the Alarms editor — built as a direct mirror of the occupancy override
+  above: a lazily-created `"<label> Ring When Skipped"` `input_boolean`,
+  tracked as `skipOverrideId` in `ConfigStore.listManagedAlarms()`,
+  short-circuiting the automation's skip condition to "ring" when "on".
+  Deliberately **not** built: reverting the icon early once the last
+  alarm inside the window has already fired (would need polling every
+  managed alarm's `schedule.*` `next_event` attribute) — deferred as a
+  cosmetic edge case not worth the complexity for a bedside clock that
+  will almost always have a next alarm well within 23h59m anyway.
 
 ## Status
 
