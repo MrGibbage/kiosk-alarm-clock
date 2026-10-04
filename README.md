@@ -30,7 +30,8 @@ Deploy target: `/srv/kiosk-alarm-clock` on docker-server
    status icon, alarm/vacation status, an occupancy status pill (built
    2026-08-12 — shows whether the smart-alarm "already up" sensor
    currently reads occupied, so a skipped alarm's cause is visible at a
-   glance), and 6 permanent action tiles. Tile order/icon/label/action
+   glance; since 2026-10-04 it's a button that opens a per-sensor
+   breakdown), and 6 permanent action tiles. Tile order/icon/label/action
    are now fully configurable (see screen 6, **Customize Buttons**,
    built 2026-08-12) — the tile *count* stays fixed at 6 (confirmed
    ceiling for a 10" screen), not the content.
@@ -488,6 +489,20 @@ the files themselves.
   never counts as occupied.
   Same day: the Ringing screen now makes Dismiss the primary button and
   Snooze the understated one (see screen 4).
+- **Done 2026-10-04**: the occupancy pill is now a button. Tapping it
+  opens a popup listing each tracked entity with its friendly name, its
+  state and "since" time, an overall verdict, and notes. It refreshes
+  every 3s while open. Raised because the pill showed "Clear" while HA
+  had the ecobee bedroom sensor at `on` and both test alarms were
+  suppressed. Two weaknesses fixed: (1) the pill used to read the list
+  from this browser's localStorage, not from
+  `input_text.kiosk_alarm_occupancy_entities`, which is what the
+  automation actually checks, so the two could drift silently. It now
+  reads the HA helper, and the popup warns if the localStorage copy
+  differs. (2) A failed fetch used to fall through to "Clear". Now a
+  failure to read the list shows "Occupancy ?", and a per-entity error
+  or 404 is shown as such in the popup. Why the tablet showed "Clear"
+  that morning isn't confirmed yet; the popup should show it next time.
 - **TODO (raised 2026-10-04)**: not every screen follows the day/night
   theme, e.g. the Alarms screen. Cause: only `main.js` reads
   `input_boolean.kiosk_alarm_night_mode` and sets `data-theme`, so

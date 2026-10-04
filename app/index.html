@@ -75,12 +75,124 @@
 
   .pill[hidden] { display: none; }
 
-  /* Diagnostic, not interactive — lets Skip glance at the clock and see
-     why a smart-skipped alarm didn't ring. Muted/default when clear;
-     accent-colored (matching the other "notable" pills) when the
-     automation's fail-open occupancy check would currently skip. */
+  /* Lets Skip glance at the clock and see why a smart-skipped alarm
+     didn't ring. Muted/default when clear; accent-colored (matching the
+     other "notable" pills) when the automation's fail-open occupancy
+     check would currently skip. Tapping opens the per-entity breakdown. */
+  .pill--occupancy {
+    border: none;
+    cursor: pointer;
+    transition: transform 120ms ease, background 120ms ease;
+  }
+  .pill--occupancy:active { transform: translateY(1px); background: var(--panel-2); }
   .pill--occupancy[data-state="occupied"] { color: var(--ink); }
   .pill--occupancy[data-state="occupied"] svg { color: var(--accent); }
+
+  /* ---------- occupancy detail popup (same backdrop/dialog pattern as
+     lighting.html's dimmer popup) ---------- */
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    background: color-mix(in srgb, var(--hinge) 55%, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease;
+    z-index: 10;
+  }
+  .backdrop.is-open { opacity: 1; pointer-events: auto; }
+
+  .dialog {
+    width: min(34rem, 90vw);
+    max-height: 88vh;
+    overflow-y: auto;
+    background: var(--panel);
+    color: var(--ink);
+    border-radius: 1rem;
+    padding: clamp(1.2rem, 2.4vw, 1.75rem);
+    box-shadow: 0 20px 50px var(--shadow);
+    transform: scale(0.94) translateY(10px);
+    opacity: 0;
+    transition: transform 160ms ease, opacity 160ms ease;
+  }
+  .backdrop.is-open .dialog { transform: scale(1) translateY(0); opacity: 1; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .backdrop, .dialog { transition: none; }
+  }
+
+  .dialog h2 {
+    margin: 0 0 0.35rem;
+    font-family: Georgia, "Noto Serif", "Times New Roman", serif;
+    font-size: clamp(1.4rem, 2.6vw, 1.8rem);
+    font-weight: 400;
+  }
+
+  .occ-verdict {
+    margin: 0 0 1rem;
+    color: var(--muted);
+    font-size: clamp(1rem, 1.8vw, 1.2rem);
+  }
+  .occ-verdict[data-state="occupied"] { color: var(--accent); }
+
+  .occ-list { list-style: none; margin: 0 0 1rem; padding: 0; }
+
+  .occ-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.8rem 0;
+    border-top: 1px solid var(--panel-2);
+  }
+  .occ-row:first-child { border-top: none; }
+
+  .occ-name { flex: 1; min-width: 0; }
+  .occ-name strong {
+    display: block;
+    font-weight: 500;
+    font-size: clamp(1.1rem, 2vw, 1.35rem);
+  }
+  .occ-name small {
+    display: block;
+    color: var(--muted);
+    font-size: 0.9rem;
+    overflow-wrap: anywhere;
+  }
+
+  .occ-state {
+    flex: none;
+    text-align: right;
+    font-size: clamp(1rem, 1.8vw, 1.2rem);
+    color: var(--muted);
+  }
+  .occ-state strong { display: block; font-weight: 600; }
+  .occ-state small { display: block; font-size: 0.85rem; }
+  .occ-state[data-state="on"] strong { color: var(--accent); }
+
+  .occ-note {
+    margin: 0 0 1rem;
+    padding: 0.75rem 0.9rem;
+    border-radius: 0.6rem;
+    background: var(--panel-2);
+    color: var(--ink);
+    font-size: 0.95rem;
+    line-height: 1.4;
+  }
+  .occ-note[hidden] { display: none; }
+
+  .dialog-done {
+    width: 100%;
+    padding: 1rem;
+    border: none;
+    border-radius: 0.75rem;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
 
   .theme-toggle,
   .settings-btn {
@@ -336,10 +448,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a6 6 0 0 0-6 6c0 3.2-1 4.5-2 5.5h16c-1-1-2-2.3-2-5.5a6 6 0 0 0-6-6Z"></path><path d="M10.3 19.5a2 2 0 0 0 3.4 0"></path></svg>
         <span id="alarmPillText">No alarms enabled</span>
       </button>
-      <div class="pill pill--occupancy" id="occupancyPill" aria-label="Bedroom occupancy status">
+      <button class="pill pill--occupancy" type="button" id="occupancyPill" aria-label="Occupancy status — show tracked sensors">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.2"></circle><path d="M5 20c0-4.2 3.1-6.5 7-6.5s7 2.3 7 6.5"></path></svg>
         <span id="occupancyPillText">Occupancy —</span>
-      </div>
+      </button>
     </div>
     <div class="status-actions">
       <button class="connection-status" id="connectionStatus" type="button" data-state="online" aria-label="Home Assistant connection status">
@@ -375,6 +487,16 @@
   <p class="date" id="date">Friday, August 7</p>
 
   <nav class="buttons" id="buttons"></nav>
+</div>
+
+<div class="backdrop" id="occupancyBackdrop">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="occupancyDialogTitle">
+    <h2 id="occupancyDialogTitle">Occupancy</h2>
+    <p class="occ-verdict" id="occupancyVerdict">Checking…</p>
+    <ul class="occ-list" id="occupancyList"></ul>
+    <p class="occ-note" id="occupancyNote" hidden></p>
+    <button class="dialog-done" id="occupancyDoneBtn" type="button">Done</button>
+  </div>
 </div>
 
 <script src="js/config-store.js"></script>

@@ -232,26 +232,179 @@
   setInterval(refreshPills, 30000);
 
   /* ---------- occupancy status ---------- */
-  /* Diagnostic only — lets Skip glance at the clock and see why a
-     smart-skipped alarm didn't ring (see kiosk_alarm.yaml's fail-open
-     occupancy condition, which OR's the same up-to-2 configured
-     entities read here — see Settings' Occupancy Detection section). */
+  /* Lets Skip glance at the clock and see why a smart-skipped alarm
+     didn't ring. Reads the entity list from HA's
+     input_text.kiosk_alarm_occupancy_entities — the list
+     kiosk_alarm.yaml's occupancy condition actually ORs — rather than
+     this browser's localStorage copy, so the pill can't disagree with the
+     automation if the two ever drift (the popup flags drift if it finds
+     any). Tapping the pill opens a per-entity breakdown. */
   var occupancyPill = document.getElementById("occupancyPill");
   var occupancyPillText = document.getElementById("occupancyPillText");
+  var occupancyBackdrop = document.getElementById("occupancyBackdrop");
+  var occupancyVerdict = document.getElementById("occupancyVerdict");
+  var occupancyList = document.getElementById("occupancyList");
+  var occupancyNote = document.getElementById("occupancyNote");
+  var occupancyDialogTimer = null;
 
-  function refreshOccupancy() {
-    var slots = ConfigStore.loadOccupancyEntities().filter(Boolean);
-    if (!slots.length) {
-      occupancyPill.dataset.state = "";
-      occupancyPillText.textContent = "Not set";
-      return;
-    }
-    Promise.all(slots.map(function (s) { return HAClient.getState(s.id); })).then(function (results) {
-      var occupied = results.some(function (res) { return res.ok && res.data && res.data.state === "on"; });
-      occupancyPill.dataset.state = occupied ? "occupied" : "";
-      occupancyPillText.textContent = occupied ? "Occupied" : "Clear";
+  function formatClockTime(d) {
+    var h = d.getHours();
+    var h12 = h % 12; if (h12 === 0) h12 = 12;
+    return h12 + ":" + String(d.getMinutes()).padStart(2, "0") + " " + (h >= 12 ? "PM" : "AM");
+  }
+
+  function formatSince(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    var sameDay = d.toDateString() === new Date().toDateString();
+    return "since " + (sameDay ? "" : d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " ") + formatClockTime(d);
+  }
+
+  // Resolves to {ok, ids, entities:[{id, res}]}. ok=false means we couldn't
+  // even read HA's list, so we genuinely don't know — distinct from an
+  // entity that HA reports as unavailable (which the automation treats as
+  // "not occupied", failing open).
+  function loadOccupancy() {
+    return HAClient.getState(FIXED.occupancyEntities).then(function (listRes) {
+      if (!listRes.ok || !listRes.data) return { ok: false, ids: [], entities: [] };
+      var ids = String(listRes.data.state || "").split(",")
+        .map(function (s) { return s.trim(); })
+        .filter(function (s) { return s && s !== "unknown" && s !== "unavailable"; });
+      return Promise.all(ids.map(function (id) { return HAClient.getState(id); })).then(function (results) {
+        return {
+          ok: true,
+          ids: ids,
+          entities: ids.map(function (id, i) { return { id: id, res: results[i] }; })
+        };
+      });
     });
   }
+
+  function isOccupied(snapshot) {
+    return snapshot.entities.some(function (e) { return e.res.ok && e.res.data && e.res.data.state === "on"; });
+  }
+
+  function renderPill(snapshot) {
+    if (!snapshot.ok) {
+      occupancyPill.dataset.state = "";
+      occupancyPillText.textContent = "Occupancy ?";
+    } else if (!snapshot.ids.length) {
+      occupancyPill.dataset.state = "";
+      occupancyPillText.textContent = "Not set";
+    } else {
+      var occupied = isOccupied(snapshot);
+      occupancyPill.dataset.state = occupied ? "occupied" : "";
+      occupancyPillText.textContent = occupied ? "Occupied" : "Clear";
+    }
+  }
+
+  function renderDialog(snapshot) {
+    occupancyList.textContent = "";
+    var notes = [];
+
+    if (!snapshot.ok) {
+      occupancyVerdict.dataset.state = "";
+      occupancyVerdict.textContent = "Couldn't reach Home Assistant to read the tracked sensors.";
+    } else if (!snapshot.ids.length) {
+      occupancyVerdict.dataset.state = "";
+      occupancyVerdict.textContent = "No sensors tracked: alarms always ring.";
+    } else if (isOccupied(snapshot)) {
+      occupancyVerdict.dataset.state = "occupied";
+      occupancyVerdict.textContent = "Occupied: alarms would be skipped and a snooze would be cancelled (unless the alarm is set to Always ring).";
+    } else {
+      occupancyVerdict.dataset.state = "";
+      occupancyVerdict.textContent = "Clear: alarms will ring.";
+    }
+
+    snapshot.entities.forEach(function (e) {
+      var li = document.createElement("li");
+      li.className = "occ-row";
+
+      var name = document.createElement("div");
+      name.className = "occ-name";
+      var title = document.createElement("strong");
+      var sub = document.createElement("small");
+      sub.textContent = e.id;
+      name.appendChild(title);
+      name.appendChild(sub);
+
+      var state = document.createElement("div");
+      state.className = "occ-state";
+      var stateText = document.createElement("strong");
+      var since = document.createElement("small");
+      state.appendChild(stateText);
+      state.appendChild(since);
+
+      if (!e.res.ok || !e.res.data) {
+        title.textContent = e.id;
+        stateText.textContent = e.res.status === 404 ? "Not found" : "Error";
+        state.dataset.state = "error";
+        notes.push(e.id + (e.res.status === 404
+          ? " doesn't exist in Home Assistant. The alarm treats it as clear."
+          : " couldn't be read just now."));
+      } else {
+        var st = e.res.data.state;
+        title.textContent = (e.res.data.attributes && e.res.data.attributes.friendly_name) || e.id;
+        stateText.textContent = st === "on" ? "Occupied" : st === "off" ? "Clear" : st.charAt(0).toUpperCase() + st.slice(1);
+        since.textContent = formatSince(e.res.data.last_changed);
+        state.dataset.state = st;
+        if (st === "unavailable" || st === "unknown") {
+          notes.push(title.textContent + " is " + st + ". The alarm treats that as clear (fails open).");
+        }
+      }
+
+      li.appendChild(name);
+      li.appendChild(state);
+      occupancyList.appendChild(li);
+    });
+
+    // Settings writes both localStorage and the HA helper; flag it if a
+    // failed push (or an edit made outside the app) left them different.
+    if (snapshot.ok) {
+      var localIds = ConfigStore.loadOccupancyEntities().filter(Boolean).map(function (s) { return s.id; });
+      var same = localIds.length === snapshot.ids.length &&
+        localIds.every(function (id) { return snapshot.ids.indexOf(id) !== -1; });
+      if (!same) {
+        notes.push("This clock's Settings list (" + (localIds.join(", ") || "none") +
+          ") doesn't match what the alarm uses (" + (snapshot.ids.join(", ") || "none") +
+          "). Re-save Occupancy Detection in Settings to sync them.");
+      }
+    }
+
+    occupancyNote.hidden = !notes.length;
+    occupancyNote.textContent = notes.join(" ");
+  }
+
+  function refreshOccupancy() {
+    return loadOccupancy().then(function (snapshot) {
+      renderPill(snapshot);
+      if (occupancyBackdrop.classList.contains("is-open")) renderDialog(snapshot);
+    });
+  }
+
+  function openOccupancyDialog() {
+    occupancyVerdict.dataset.state = "";
+    occupancyVerdict.textContent = "Checking…";
+    occupancyList.textContent = "";
+    occupancyNote.hidden = true;
+    occupancyBackdrop.classList.add("is-open");
+    refreshOccupancy();
+    // Faster refresh while open, so walking past a motion sensor shows up
+    // promptly while you're watching.
+    occupancyDialogTimer = setInterval(refreshOccupancy, 3000);
+  }
+
+  function closeOccupancyDialog() {
+    occupancyBackdrop.classList.remove("is-open");
+    clearInterval(occupancyDialogTimer);
+    occupancyDialogTimer = null;
+  }
+
+  occupancyPill.addEventListener("click", openOccupancyDialog);
+  document.getElementById("occupancyDoneBtn").addEventListener("click", closeOccupancyDialog);
+  occupancyBackdrop.addEventListener("click", function (evt) {
+    if (evt.target === occupancyBackdrop) closeOccupancyDialog();
+  });
 
   refreshOccupancy();
   setInterval(refreshOccupancy, 15000);
