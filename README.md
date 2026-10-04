@@ -327,6 +327,23 @@ leaves the theme alone. It also re-syncs on HA start and on automation
 reload, so the boolean can't drift from the light. The sun/moon button
 still works as a manual override until the light next changes.
 
+**Screen brightness follows the same light** (added 2026-10-04): the same
+automation sets `number.master_bedroom_kiosk_alarm_clock_screen_brightness`
+to 255 (light on) or 10 (light off). That control comes from HA's **Fully
+Kiosk Browser integration**, which talks to Fully's Remote Administration
+(a PLUS-license feature) on port 2323. The tablet has an OPNsense static
+DHCP mapping at `192.168.0.223`. That mapping is keyed to its Android
+**randomized** per-network MAC `06:ee:39:4a:07:ea`, so forgetting and
+re-adding the Wi-Fi network on the tablet will change the MAC and break
+the mapping. The Remote Admin password lives only in the HA integration
+config. This replaces Tasker's sunset/sunrise dim/undim profiles, which
+are disabled on the tablet; re-enabling them would fight the automation
+twice a day. The brightness step has `continue_on_error`, so an offline
+tablet never blocks the theme switch. The integration also exposes
+useful extras: screenshot, current page, battery/plugged-in, restart
+browser, clear cache (handy for the WebView caching gotcha above), and
+load start URL.
+
 Use the Z-Wave paddle entity, **not** `light.master_bedroom_fan_light`.
 That was a dead Insteon entity for a switch that's no longer installed,
 stuck at `unknown`, and removed the same day.
