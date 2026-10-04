@@ -464,11 +464,20 @@ the files themselves.
   above: a lazily-created `"<label> Ring When Skipped"` `input_boolean`,
   tracked as `skipOverrideId` in `ConfigStore.listManagedAlarms()`,
   short-circuiting the automation's skip condition to "ring" when "on".
-  Deliberately **not** built: reverting the icon early once the last
-  alarm inside the window has already fired (would need polling every
-  managed alarm's `schedule.*` `next_event` attribute) — deferred as a
-  cosmetic edge case not worth the complexity for a bedside clock that
-  will almost always have a next alarm well within 23h59m anyway.
+  Originally **not** built: reverting the icon early once the last
+  alarm inside the window had already fired (deferred as cosmetic).
+  **Built 2026-10-04** after it proved confusing in practice: at bedtime
+  the tile still showed last night's skip, and it wasn't clear whether
+  tonight's skip had been armed. Done HA-side, not by polling from the
+  app: `kiosk_alarm_skip_auto_end` in `kiosk_alarm.yaml` triggers when a
+  kiosk alarm fires during an active skip and waits for that schedule
+  block to end, so `next_event`s are fresh and the trigger automation has
+  already declined to ring. If no enabled alarm without a Ring When
+  Skipped override still has a `next_event` before `skip_until`, it sets
+  `skip_until` a minute into the past (same as tapping the tile). The tile
+  follows on its next 30s poll. Only windows ending within 24h are
+  touched, so a multi-day vacation skip set from the HA app is never cut
+  short.
 - **Done 2026-10-04**: occupancy auto-dismisses a pending snooze. The
   same "lights on" signal that stops an alarm from ringing now also
   stops a snooze from coming back. Two changes to `kiosk_alarm.yaml` on
