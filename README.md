@@ -501,8 +501,15 @@ the files themselves.
   reads the HA helper, and the popup warns if the localStorage copy
   differs. (2) A failed fetch used to fall through to "Clear". Now a
   failure to read the list shows "Occupancy ?", and a per-entity error
-  or 404 is shown as such in the popup. Why the tablet showed "Clear"
-  that morning isn't confirmed yet; the popup should show it next time.
+  or 404 is shown as such in the popup. The popup then found the actual
+  drift: the tablet had `light.master_toilet`, HA had the ecobee. Root
+  cause was `initial: "binary_sensor.bedroom_occupancy"` on the
+  `input_text` in HA's `configuration.yaml`. `initial:` resets a helper
+  on every HA restart, so a restart silently overwrote the list Settings
+  had pushed. Removed (HA now restores the last value). Settings' Save
+  button also re-pushes the list now (before, only changing a picker
+  slot did), shows whether the sync worked, and stays on the page if it
+  failed. **Don't put `initial:` back on any helper the app writes.**
 - **TODO (raised 2026-10-04)**: not every screen follows the day/night
   theme, e.g. the Alarms screen. Cause: only `main.js` reads
   `input_boolean.kiosk_alarm_night_mode` and sets `data-theme`, so

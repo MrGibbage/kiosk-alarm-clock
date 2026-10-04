@@ -326,6 +326,7 @@
       <button class="validate-btn" type="button" id="occSlot1Choose">Choose…</button>
       <button class="icon-btn occ-clear" type="button" id="occSlot1Clear" aria-label="Clear sensor 2" hidden>&times;</button>
     </div>
+    <div class="field-status" id="occSyncStatus"></div>
   </div>
 
   <div class="save-row">
@@ -391,16 +392,31 @@
       }
     }
 
-    function persistOccSlots() {
-      ConfigStore.saveOccupancyEntities(occSlots);
-      // The automation can't read localStorage, so every change also gets
-      // pushed to the HA helper it actually reads (comma-separated list,
-      // empty slots omitted).
+    var occSyncStatus = document.getElementById("occSyncStatus");
+
+    // The automation can't read localStorage, so the list also gets pushed
+    // to the HA helper it actually reads (comma-separated list, empty
+    // slots omitted). Resolves true/false and shows the outcome, since a
+    // silently failed push is exactly how the two lists drifted before.
+    function pushOccSlotsToHA() {
       var ids = occSlots.filter(Boolean).map(function (s) { return s.id; }).join(",");
-      HAClient.callService("input_text", "set_value", {
+      occSyncStatus.dataset.state = "checking";
+      occSyncStatus.textContent = "Syncing to Home Assistant…";
+      return HAClient.callService("input_text", "set_value", {
         entity_id: ConfigStore.FIXED.occupancyEntities,
         value: ids
+      }).then(function (res) {
+        occSyncStatus.dataset.state = res.ok ? "ok" : "error";
+        occSyncStatus.textContent = res.ok
+          ? "✓ Synced to Home Assistant"
+          : "✗ Couldn't sync to Home Assistant (" + (res.error || "HTTP " + res.status) + "). The alarm is still using the old list.";
+        return res.ok;
       });
+    }
+
+    function persistOccSlots() {
+      ConfigStore.saveOccupancyEntities(occSlots);
+      return pushOccSlotsToHA();
     }
 
     function renderOccResultList() {
@@ -631,7 +647,11 @@
 
     document.getElementById("saveBtn").addEventListener("click", function () {
       saveAllFields();
-      window.location.href = "index.html";
+      // Re-push the occupancy list too, so Save is a reliable way to fix a
+      // drifted HA copy. Stay on the page if it fails so the error is seen.
+      pushOccSlotsToHA().then(function (ok) {
+        if (ok) window.location.href = "index.html";
+      });
     });
 
     document.getElementById("customizeButtonsBtn").addEventListener("click", function () {
