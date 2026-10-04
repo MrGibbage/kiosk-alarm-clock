@@ -61,10 +61,12 @@ Deploy target: `/srv/kiosk-alarm-clock` on docker-server
 4. **Ringing** (built 2026-08-10, not in the original mockups — designed
    during scaffolding once the gap was noticed) — full-screen takeover
    shown whenever `input_boolean.kiosk_alarm_ringing` is on: alarm label,
-   current time, big Snooze/Dismiss buttons, plays the firing alarm's
-   mapped sound/video. Snooze arms `timer.kiosk_alarm_snooze` (9 min) and
-   clears the ringing flag; Dismiss just clears it (and cancels any
-   pending snooze timer).
+   current time, Dismiss/Snooze buttons, plays the firing alarm's
+   mapped sound/video. Dismiss is the large filled primary button (on
+   top); Snooze is a smaller outlined, muted-text button below it, so a
+   half-asleep tap lands on Dismiss (swapped 2026-10-04). Snooze arms
+   `timer.kiosk_alarm_snooze` (9 min) and clears the ringing flag;
+   Dismiss just clears it (and cancels any pending snooze timer).
 5. **Settings** (built 2026-08-10, not in the original mockups) — where
    the HA base URL/token are entered and validated live against HA
    (connection test, not a per-entity check — entity assignment now
@@ -467,6 +469,25 @@ the files themselves.
   managed alarm's `schedule.*` `next_event` attribute) — deferred as a
   cosmetic edge case not worth the complexity for a bedside clock that
   will almost always have a next alarm well within 23h59m anyway.
+- **Done 2026-10-04**: occupancy auto-dismisses a pending snooze. The
+  same "lights on" signal that stops an alarm from ringing now also
+  stops a snooze from coming back. Two changes to `kiosk_alarm.yaml` on
+  the `homeassistant` host: (1) a new `kiosk_alarm_snooze_occupied`
+  automation cancels `timer.kiosk_alarm_snooze` the moment any listed
+  occupancy entity goes to `on` while the timer is active. It uses a raw
+  `state_changed` trigger, like the main trigger automation, because the
+  entity list lives in `input_text.kiosk_alarm_occupancy_entities` and
+  can't be a static state trigger. Cancelling the timer is exactly what
+  Dismiss does, so the main screen's snooze state clears the same way.
+  (2) `kiosk_alarm_snooze_expired` gained the same occupancy condition,
+  as a backstop for an entity that was already `on` when you hit Snooze
+  or a missed state event. Both respect the source alarm's "Ignore
+  Occupancy" override, found through `input_text.kiosk_alarm_ringing_
+  source`'s friendly_name, so an always-ring alarm's snooze still comes
+  back. Fails open like everything else here: `unavailable` or `unknown`
+  never counts as occupied.
+  Same day: the Ringing screen now makes Dismiss the primary button and
+  Snooze the understated one (see screen 4).
 
 ## Status
 
