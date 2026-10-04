@@ -312,19 +312,31 @@ Source of truth is `input_boolean.kiosk_alarm_night_mode` in HA (added to
 boolean via `input_boolean.turn_on`/`turn_off` instead of setting
 `data-theme` directly, so a manual tap and the next poll never fight.
 
-**Triggering**: an HA automation (`automation/kiosk_night_mode.yaml` on
-the `homeassistant` host), not Tasker — HA's own `sun.sun` entity already
-computes sunset/sunrise (it's what backs the `platform: sun` trigger),
-so there's no reason to round-trip through the tablet's Tasker at all.
-Two single-purpose automations, `kiosk_alarm_night_mode_on` (trigger:
-`sun`/`sunset`) and `kiosk_alarm_night_mode_off` (trigger: `sun`/
-`sunrise`), each just flip the one boolean. Tasker's existing sunset/
-sunrise profiles are unrelated — they still handle screen brightness
-dim/undim only, untouched by this feature.
+**Triggering (since 2026-10-04): follows the bedroom ceiling light.** One
+HA automation, `kiosk_alarm_night_mode_follow_ceiling_light` in
+`automation/kiosk_night_mode.yaml` on the `homeassistant` host, mirrors
+the master bedroom ceiling fan light: `light.in_wall_paddle_switch_qfsw_500s`
+(the Z-Wave paddle) **on** means the day theme, **off** means the night
+theme, at any hour. Skip chose this over sunset/sunrise because the
+room's real brightness tracks that light, not the sun. Neither the
+tablet nor the ecobee room sensor has an ambient light sensor, and this
+was tried before buying one. A known consequence, accepted: on a sunny
+afternoon with the light off, the clock is in the dim night theme.
+`unknown`/`unavailable` are ignored, so a restart or Z-Wave hiccup
+leaves the theme alone. It also re-syncs on HA start and on automation
+reload, so the boolean can't drift from the light. The sun/moon button
+still works as a manual override until the light next changes.
 
-Falls open sensibly if HA restarts right around sunset/sunrise: the
-boolean just keeps its last value until the automation next fires, so
-the theme doesn't flap.
+Use the Z-Wave paddle entity, **not** `light.master_bedroom_fan_light`.
+That was a dead Insteon entity for a switch that's no longer installed,
+stuck at `unknown`, and removed the same day.
+
+*History:* from 2026-08-19 to 2026-10-04 this was two sun-triggered
+automations (`kiosk_alarm_night_mode_on` at sunset, `..._off` at
+sunrise), chosen over Tasker because HA's `sun.sun` already computes
+both. Tasker's own sunset/sunrise profiles were always separate and
+still only dim/undim the tablet's screen brightness. If you go back to
+the sun, that's where to look.
 
 ## Secrets
 
