@@ -488,6 +488,14 @@ the files themselves.
   never counts as occupied.
   Same day: the Ringing screen now makes Dismiss the primary button and
   Snooze the understated one (see screen 4).
+- **TODO (raised 2026-10-04)**: not every screen follows the day/night
+  theme, e.g. the Alarms screen. Cause: only `main.js` reads
+  `input_boolean.kiosk_alarm_night_mode` and sets `data-theme`, so
+  `alarms.html`, `lighting.html`, `ringing.html`, `settings.html`,
+  `buttons.html` and `customize-lighting.html` fall back to the
+  browser's `prefers-color-scheme`. Likely fix: move the
+  read-the-boolean-and-set-`data-theme` logic into a small shared script
+  that every page loads, so it lives in one place.
 
 ## Status
 
