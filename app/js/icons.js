@@ -47,7 +47,7 @@ var Icons = (function () {
     { id: "open_lighting", name: "Open Lighting Screen", icon: "lighting" },
     { id: "open_alarms", name: "Open Alarms Screen", icon: "alarm" },
     { id: "skip_tonight", name: "Skip Tonight", icon: "skip" },
-    { id: "snooze", name: "Snooze Active Alarm", icon: "alarm" }
+    { id: "snooze", name: "Snooze Status (snooze / cancel snooze)", icon: "alarm" }
   ];
 
   function findAppAction(id) {

@@ -447,13 +447,56 @@
     setSkipUntil(new Date(Date.now() + (23 * 60 + 59) * 60 * 1000));
   }
 
+  /* Snooze status tile (action "snooze"). Three behaviours:
+     - ringing: tap snoozes, same as the Ringing screen's Snooze button
+       (rarely reachable, since ringing.html takes over the screen);
+     - snooze running: filled like Skip Tonight, label counts down to the
+       re-ring, tap cancels the snooze (what Dismiss would have done);
+     - otherwise: plain tile, tap does nothing, so a stray tap can't arm
+       a timer that later re-triggers ringing for no reason. */
+  var snoozeFinishesAt = 0; // epoch ms, 0 = no snooze running
+
+  function snoozeTiles() {
+    return Array.prototype.slice.call(buttonsNav.querySelectorAll('.tile[data-action="snooze"]'));
+  }
+
+  function renderSnoozeTiles() {
+    var remaining = snoozeFinishesAt ? Math.max(0, snoozeFinishesAt - Date.now()) : 0;
+    snoozeTiles().forEach(function (tile) {
+      var span = tile.querySelector("span");
+      if (!tile.dataset.label) tile.dataset.label = span.textContent;
+      var active = snoozeFinishesAt > 0;
+      tile.classList.toggle("is-snoozing", active);
+      if (active) {
+        var secs = Math.ceil(remaining / 1000);
+        span.textContent = Math.floor(secs / 60) + ":" + String(secs % 60).padStart(2, "0");
+        tile.setAttribute("aria-label", "Snoozed, rings again in " + span.textContent + ". Tap to cancel the snooze.");
+      } else {
+        span.textContent = tile.dataset.label;
+        tile.removeAttribute("aria-label");
+      }
+    });
+  }
+
+  function refreshSnooze() {
+    return HAClient.getState(FIXED.snoozeTimer).then(function (res) {
+      var finishes = res.ok && res.data && res.data.state === "active" && res.data.attributes
+        ? Date.parse(res.data.attributes.finishes_at) : NaN;
+      snoozeFinishesAt = isNaN(finishes) ? 0 : finishes;
+      renderSnoozeTiles();
+    });
+  }
+
   function snooze() {
-    // Only meaningful if something is actually ringing right now — a stray
-    // tap otherwise would arm a snooze timer that later re-triggers ringing
-    // for no reason.
+    if (snoozeFinishesAt) {
+      snoozeFinishesAt = 0;
+      renderSnoozeTiles();
+      HAClient.callService("timer", "cancel", { entity_id: FIXED.snoozeTimer }).then(refreshSnooze);
+      return;
+    }
     HAClient.getState(FIXED.ringing).then(function (res) {
       if (res.ok && res.data && res.data.state === "on") {
-        HAClient.callService("timer", "start", { entity_id: FIXED.snoozeTimer });
+        HAClient.callService("timer", "start", { entity_id: FIXED.snoozeTimer }).then(refreshSnooze);
         HAClient.callService("input_boolean", "turn_off", { entity_id: FIXED.ringing });
       }
     });
@@ -481,4 +524,8 @@
   });
 
   refreshPills();
+  refreshSnooze();
+  setInterval(refreshSnooze, 5000);
+  // Local countdown between polls; only does work while a snooze runs.
+  setInterval(function () { if (snoozeFinishesAt) renderSnoozeTiles(); }, 1000);
 })();

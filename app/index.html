@@ -434,9 +434,13 @@
      "selected" look as .icon-swatch.is-selected (buttons.html) instead of a
      separate banner/pill. --accent-ink already flips per theme (near-black
      in night mode, white in day mode), so no extra theme handling needed. */
-  .tile.is-skipping { background: var(--accent); }
+  .tile.is-skipping,
+  .tile.is-snoozing { background: var(--accent); }
   .tile.is-skipping svg,
-  .tile.is-skipping span { color: var(--accent-ink); }
+  .tile.is-skipping span,
+  .tile.is-snoozing svg,
+  .tile.is-snoozing span { color: var(--accent-ink); }
+  .tile.is-snoozing span { font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>

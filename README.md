@@ -510,6 +510,16 @@ the files themselves.
   button also re-pushes the list now (before, only changing a picker
   slot did), shows whether the sync worked, and stays on the page if it
   failed. **Don't put `initial:` back on any helper the app writes.**
+- **Done 2026-10-04**: the Snooze tile became a snooze status tile.
+  Before, it only did something while an alarm was ringing, and that's
+  exactly when the Ringing screen covers the main screen, so it was
+  basically never usable. Now, while `timer.kiosk_alarm_snooze` is
+  active, the tile fills with the accent color (same look as Skip Tonight
+  while skipping) and its label counts down to the re-ring, using the
+  timer's `finishes_at`, polled every 5s and ticked locally every
+  second. Tapping it then cancels the snooze. While ringing it still
+  snoozes, and otherwise a tap does nothing. Same `snooze` action id, so
+  existing button layouts pick it up with no migration.
 - **TODO (raised 2026-10-04)**: not every screen follows the day/night
   theme, e.g. the Alarms screen. Cause: only `main.js` reads
   `input_boolean.kiosk_alarm_night_mode` and sets `data-theme`, so
