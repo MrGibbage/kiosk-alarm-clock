@@ -528,6 +528,19 @@ the files themselves.
   second. Tapping it then cancels the snooze. While ringing it still
   snoozes, and otherwise a tap does nothing. Same `snooze` action id, so
   existing button layouts pick it up with no migration.
+- **Done 2026-10-04**: ringing is capped, and a light can stop it. Before
+  this an alarm rang until a button was pressed: nothing in HA ever
+  turned `input_boolean.kiosk_alarm_ringing` off, and the Ringing screen
+  loops its media. Two HA-side changes in `kiosk_alarm.yaml`:
+  `kiosk_alarm_ringing_timeout` turns ringing off after 10 minutes and
+  cancels any snooze timer, which is Dismiss semantics. Auto-stop was
+  chosen over auto-snooze. The state trigger's `for:` restarts on every
+  ring, so a re-ring after a snooze gets its own 10 minutes. And
+  `kiosk_alarm_snooze_occupied` (id kept so its entity id didn't change)
+  now also fires while ringing, not just while snoozed, so a tracked
+  light coming on dismisses a ringing alarm too. It still respects the
+  per-alarm Ignore Occupancy override. The Ringing screen notices either
+  one within its 5s poll and returns to the clock.
 - **Done 2026-10-04**: every screen follows the day/night theme. Before
   this, only `main.js` read `input_boolean.kiosk_alarm_night_mode`, so
   the other six screens fell back to the browser's
