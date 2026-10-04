@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Kiosk Alarm Clock — Alarms</title>
 <link rel="stylesheet" href="css/tokens.css">
+<script src="js/theme.js"></script>
 <style>
   .stage {
     display: flex;
@@ -398,10 +399,15 @@
     user-select: none;
   }
 
-  /* Fixed ivory face + dark ink, not tied to --panel-2/--ink — this dial
-     is meant to read like a physical clock face regardless of the app's
-     light/dark theme, so its numbers need to stay dark against it. */
+  /* Ivory face + dark ink by day, so the dial reads like a physical
+     clock face. At night it follows the dim bedside palette instead
+     (2026-10-04): once theme.js made this screen honor night mode, a
+     bright ivory disc was the one thing glowing on an otherwise
+     near-black screen. Only an explicit data-theme="dark" switches it,
+     and theme.js always sets one once HA has answered. */
   .dial-face { fill: #f6ecdc; }
+  :root[data-theme="dark"] .dial-face { fill: var(--panel-3); }
+  :root[data-theme="dark"] .dial-number { fill: var(--ink); }
   .dial-center { fill: var(--accent); }
   .dial-hand { stroke: var(--accent); stroke-width: 2; }
   .dial-hand-end { fill: var(--accent); opacity: 0.28; }

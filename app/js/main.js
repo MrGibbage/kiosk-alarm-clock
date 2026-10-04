@@ -115,33 +115,11 @@
   setInterval(tick, 1000);
 
   /* ---------- day/night theme ---------- */
-  /* Source of truth is input_boolean.kiosk_alarm_night_mode in HA — Tasker
-     flips it at sunset/sunrise (the same profiles that already dim/undim
-     the tablet's screen brightness, 2026-08-19), and this polls it on the
-     same 30s cadence as the other pills. The sun/moon button writes back
-     to that same boolean instead of setting data-theme directly, so a
-     manual tap and the next poll never fight each other. */
+  /* Polling and applying the theme lives in js/theme.js (shared by every
+     screen). The sun/moon button just asks it to flip HA's boolean. */
 
-  var toggle = document.getElementById("themeToggle");
-  var root = document.documentElement;
-
-  function applyTheme(isNight) {
-    root.setAttribute("data-theme", isNight ? "dark" : "light");
-  }
-
-  function refreshTheme() {
-    HAClient.getState(FIXED.nightMode).then(function (res) {
-      if (res.ok && res.data) applyTheme(res.data.state === "on");
-    });
-  }
-
-  refreshTheme();
-  setInterval(refreshTheme, 30000);
-
-  toggle.addEventListener("click", function () {
-    var isNight = root.getAttribute("data-theme") === "dark";
-    HAClient.callService("input_boolean", isNight ? "turn_off" : "turn_on", { entity_id: FIXED.nightMode })
-      .then(refreshTheme);
+  document.getElementById("themeToggle").addEventListener("click", function () {
+    Theme.toggle();
   });
 
   document.getElementById("settingsBtn").addEventListener("click", function () {

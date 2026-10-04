@@ -307,8 +307,7 @@ it, gray rather than white digits) and "light" to plain black-on-white.
 
 Source of truth is `input_boolean.kiosk_alarm_night_mode` in HA (added to
 `configuration.yaml` on the `homeassistant` host, reloaded via
-`input_boolean.reload` — no restart needed). The app polls it on the same
-30s cadence as the other status pills (`main.js` `refreshTheme`) and sets
+`input_boolean.reload` — no restart needed). The app polls it every 30s on every screen (`js/theme.js`) and sets
 `data-theme` accordingly; the sun/moon button writes back to the same
 boolean via `input_boolean.turn_on`/`turn_off` instead of setting
 `data-theme` directly, so a manual tap and the next poll never fight.
@@ -520,14 +519,20 @@ the files themselves.
   second. Tapping it then cancels the snooze. While ringing it still
   snoozes, and otherwise a tap does nothing. Same `snooze` action id, so
   existing button layouts pick it up with no migration.
-- **TODO (raised 2026-10-04)**: not every screen follows the day/night
-  theme, e.g. the Alarms screen. Cause: only `main.js` reads
-  `input_boolean.kiosk_alarm_night_mode` and sets `data-theme`, so
-  `alarms.html`, `lighting.html`, `ringing.html`, `settings.html`,
-  `buttons.html` and `customize-lighting.html` fall back to the
-  browser's `prefers-color-scheme`. Likely fix: move the
-  read-the-boolean-and-set-`data-theme` logic into a small shared script
-  that every page loads, so it lives in one place.
+- **Done 2026-10-04**: every screen follows the day/night theme. Before
+  this, only `main.js` read `input_boolean.kiosk_alarm_night_mode`, so
+  the other six screens fell back to the browser's
+  `prefers-color-scheme`. The poller moved into a shared `js/theme.js`
+  that every page loads in `<head>`. It caches the last theme in
+  localStorage and applies it before first paint, so a page doesn't
+  flash the wrong palette while waiting on HA. `main.js`'s sun/moon
+  button now just calls `Theme.toggle()`. Two follow-on fixes:
+  `tokens.css` pins `color-scheme` per element on
+  inputs/selects/textareas, so native checkboxes match the theme
+  (`:root` keeps `light dark` for the Force Dark opt-out), and the
+  Alarms dial is now dim at night. Its fixed ivory face was a deliberate
+  "physical clock" choice, but it glowed on the night screen; it stays
+  ivory by day.
 
 ## Status
 
